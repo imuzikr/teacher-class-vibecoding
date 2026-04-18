@@ -2259,6 +2259,9 @@ button:focus-visible {
   color: #e5ebff;
   font-size: 1.3rem;
   line-height: 1.35;
+  min-height: calc(1.35em * 2);
+  display: flex;
+  align-items: flex-start;
 }
 
 .gallery-status {
