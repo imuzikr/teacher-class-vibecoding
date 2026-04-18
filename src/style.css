@@ -2305,6 +2305,24 @@ button:focus-visible {
   max-width: 72ch;
 }
 
+.lesson-canvas-artwork {
+  min-height: 208px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(189, 244, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(17, 25, 45, 0.3), rgba(10, 16, 30, 0.48)),
+    radial-gradient(circle at 20% 20%, rgba(189, 244, 255, 0.06), transparent 30%),
+    linear-gradient(135deg, rgba(32, 40, 59, 0.95), rgba(12, 18, 32, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.lesson-canvas-artwork svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .lesson-canvas-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2750,6 +2768,10 @@ button:focus-visible {
 
   .lesson-canvas-meta {
     grid-template-columns: 1fr;
+  }
+
+  .lesson-canvas-artwork {
+    min-height: 180px;
   }
 
   .lesson-inline-reading-grid {

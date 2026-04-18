@@ -4,7 +4,6 @@ import {
   clearLessonPreview,
   getLessonPreview,
   getLessonSubmission,
-  getState,
   isLessonComplete,
   resetProgress,
   setLastVisitedLesson,
@@ -143,6 +142,207 @@ function renderInlineReadings(lesson: CourseLesson) {
   `;
 }
 
+function renderSessionArtwork(lesson: CourseLesson) {
+  const artworkMap: Record<string, string> = {
+    'session-1': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s1-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#bdf4ff" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#8b7cff" stop-opacity="0.85" />
+          </linearGradient>
+          <linearGradient id="grad-s1-b" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#25314a" />
+            <stop offset="100%" stop-color="#111a2c" />
+          </linearGradient>
+        </defs>
+        <rect x="22" y="40" width="216" height="138" rx="20" fill="url(#grad-s1-b)" stroke="rgba(189,244,255,0.18)" />
+        <rect x="56" y="70" width="148" height="18" rx="9" fill="rgba(189,244,255,0.18)" />
+        <rect x="56" y="104" width="110" height="14" rx="7" fill="rgba(221,183,255,0.34)" />
+        <rect x="56" y="132" width="128" height="14" rx="7" fill="rgba(229,235,255,0.18)" />
+        <circle cx="326" cy="108" r="42" fill="url(#grad-s1-a)" opacity="0.9" />
+        <path d="M304 108h44M326 86v44" stroke="#0e1628" stroke-width="10" stroke-linecap="round" />
+        <rect x="414" y="30" width="264" height="92" rx="22" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
+        <rect x="414" y="138" width="264" height="92" rx="22" fill="rgba(23,31,51,0.78)" stroke="rgba(221,183,255,0.16)" />
+        <rect x="448" y="58" width="178" height="16" rx="8" fill="rgba(229,235,255,0.92)" />
+        <rect x="448" y="86" width="120" height="12" rx="6" fill="rgba(189,244,255,0.26)" />
+        <rect x="448" y="166" width="152" height="16" rx="8" fill="rgba(229,235,255,0.85)" />
+        <rect x="448" y="194" width="98" height="12" rx="6" fill="rgba(221,183,255,0.34)" />
+        <path d="M238 108C258 108 273 108 284 108" stroke="rgba(189,244,255,0.45)" stroke-width="3" stroke-dasharray="8 10" />
+        <path d="M368 108C385 108 402 92 414 76" stroke="rgba(189,244,255,0.45)" stroke-width="3" stroke-dasharray="8 10" fill="none" />
+        <path d="M368 108C385 108 402 152 414 184" stroke="rgba(221,183,255,0.38)" stroke-width="3" stroke-dasharray="8 10" fill="none" />
+      </svg>
+    `,
+    'session-2': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s2-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#6ce7ff" />
+            <stop offset="100%" stop-color="#8b7cff" />
+          </linearGradient>
+        </defs>
+        <rect x="34" y="34" width="260" height="182" rx="24" fill="rgba(23,31,51,0.9)" stroke="rgba(189,244,255,0.16)" />
+        <path d="M34 86h260M120 34v182M206 34v182" stroke="rgba(189,244,255,0.14)" />
+        <circle cx="78" cy="60" r="10" fill="rgba(189,244,255,0.72)" />
+        <rect x="56" y="104" width="42" height="18" rx="9" fill="rgba(221,183,255,0.42)" />
+        <rect x="136" y="104" width="42" height="18" rx="9" fill="rgba(189,244,255,0.32)" />
+        <rect x="222" y="104" width="42" height="18" rx="9" fill="rgba(229,235,255,0.24)" />
+        <rect x="56" y="146" width="42" height="18" rx="9" fill="rgba(221,183,255,0.26)" />
+        <rect x="136" y="146" width="42" height="18" rx="9" fill="rgba(189,244,255,0.5)" />
+        <rect x="222" y="146" width="42" height="18" rx="9" fill="rgba(229,235,255,0.24)" />
+        <path d="M294 125H374" stroke="rgba(189,244,255,0.38)" stroke-width="4" stroke-dasharray="10 10" />
+        <path d="M374 74h162l40 36-40 36H374z" fill="rgba(23,31,51,0.9)" stroke="rgba(221,183,255,0.26)" />
+        <path d="M406 104h98" stroke="url(#grad-s2-a)" stroke-width="6" stroke-linecap="round" />
+        <path d="M554 74v72" stroke="rgba(221,183,255,0.16)" />
+        <path d="M402 156h162l40 36-40 36H402z" fill="rgba(23,31,51,0.78)" stroke="rgba(189,244,255,0.18)" />
+        <path d="M438 188h96" stroke="rgba(229,235,255,0.9)" stroke-width="6" stroke-linecap="round" />
+        <circle cx="640" cy="110" r="22" fill="url(#grad-s2-a)" opacity="0.92" />
+        <circle cx="640" cy="192" r="16" fill="rgba(221,183,255,0.54)" />
+      </svg>
+    `,
+    'session-3': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s3-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#bdf4ff" />
+            <stop offset="100%" stop-color="#a06dff" />
+          </linearGradient>
+        </defs>
+        <circle cx="360" cy="130" r="62" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.18)" />
+        <circle cx="360" cy="130" r="22" fill="url(#grad-s3-a)" />
+        <ellipse cx="360" cy="130" rx="180" ry="54" fill="none" stroke="rgba(189,244,255,0.32)" stroke-width="2.5" />
+        <ellipse cx="360" cy="130" rx="124" ry="98" fill="none" stroke="rgba(221,183,255,0.22)" stroke-width="2.5" transform="rotate(-18 360 130)" />
+        <ellipse cx="360" cy="130" rx="124" ry="98" fill="none" stroke="rgba(189,244,255,0.16)" stroke-width="2.5" transform="rotate(18 360 130)" />
+        <rect x="90" y="96" width="112" height="68" rx="18" fill="rgba(23,31,51,0.86)" stroke="rgba(189,244,255,0.16)" />
+        <rect x="518" y="56" width="112" height="68" rx="18" fill="rgba(23,31,51,0.86)" stroke="rgba(221,183,255,0.2)" />
+        <rect x="510" y="164" width="120" height="58" rx="18" fill="rgba(23,31,51,0.72)" stroke="rgba(189,244,255,0.14)" />
+        <circle cx="146" cy="130" r="9" fill="rgba(189,244,255,0.9)" />
+        <circle cx="574" cy="90" r="9" fill="rgba(221,183,255,0.9)" />
+        <circle cx="570" cy="193" r="9" fill="rgba(189,244,255,0.72)" />
+      </svg>
+    `,
+    'session-4': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s4-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#6ce7ff" />
+            <stop offset="100%" stop-color="#d08aff" />
+          </linearGradient>
+        </defs>
+        <rect x="48" y="38" width="194" height="132" rx="22" fill="rgba(23,31,51,0.94)" stroke="rgba(189,244,255,0.16)" />
+        <rect x="80" y="70" width="120" height="16" rx="8" fill="rgba(229,235,255,0.92)" />
+        <rect x="80" y="100" width="88" height="12" rx="6" fill="rgba(221,183,255,0.42)" />
+        <rect x="80" y="126" width="132" height="12" rx="6" fill="rgba(189,244,255,0.24)" />
+        <rect x="182" y="88" width="248" height="148" rx="24" fill="rgba(23,31,51,0.78)" stroke="rgba(221,183,255,0.14)" />
+        <rect x="238" y="122" width="136" height="12" rx="6" fill="rgba(229,235,255,0.88)" />
+        <rect x="238" y="148" width="110" height="12" rx="6" fill="rgba(189,244,255,0.26)" />
+        <rect x="238" y="174" width="150" height="12" rx="6" fill="rgba(221,183,255,0.32)" />
+        <path d="M430 162h72" stroke="url(#grad-s4-a)" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 10" />
+        <rect x="514" y="102" width="148" height="118" rx="24" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
+        <path d="M548 136h44M548 160h78M548 184h58" stroke="rgba(229,235,255,0.86)" stroke-width="10" stroke-linecap="round" />
+        <circle cx="596" cy="70" r="26" fill="url(#grad-s4-a)" opacity="0.95" />
+      </svg>
+    `,
+    'session-5': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s5-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#bdf4ff" />
+            <stop offset="100%" stop-color="#7df0b7" />
+          </linearGradient>
+          <linearGradient id="grad-s5-b" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#8b7cff" />
+            <stop offset="100%" stop-color="#6ce7ff" />
+          </linearGradient>
+        </defs>
+        <rect x="82" y="78" width="126" height="108" rx="24" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
+        <rect x="118" y="106" width="54" height="14" rx="7" fill="rgba(229,235,255,0.88)" />
+        <rect x="118" y="132" width="42" height="12" rx="6" fill="rgba(189,244,255,0.3)" />
+        <circle cx="360" cy="132" r="56" fill="rgba(23,31,51,0.96)" stroke="rgba(125,240,183,0.28)" />
+        <circle cx="360" cy="132" r="18" fill="url(#grad-s5-a)" />
+        <circle cx="360" cy="132" r="92" fill="none" stroke="rgba(189,244,255,0.14)" stroke-dasharray="6 10" />
+        <rect x="512" y="66" width="126" height="72" rx="20" fill="rgba(23,31,51,0.9)" stroke="rgba(108,231,255,0.18)" />
+        <rect x="512" y="154" width="126" height="72" rx="20" fill="rgba(23,31,51,0.82)" stroke="rgba(139,124,255,0.18)" />
+        <rect x="548" y="92" width="54" height="12" rx="6" fill="rgba(229,235,255,0.88)" />
+        <rect x="548" y="180" width="54" height="12" rx="6" fill="rgba(229,235,255,0.88)" />
+        <path d="M208 132h96" stroke="url(#grad-s5-b)" stroke-width="4" stroke-dasharray="8 10" />
+        <path d="M416 132h96" stroke="url(#grad-s5-b)" stroke-width="4" stroke-dasharray="8 10" />
+        <circle cx="302" cy="132" r="7" fill="#6ce7ff" />
+        <circle cx="418" cy="132" r="7" fill="#7df0b7" />
+      </svg>
+    `,
+    'session-6': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s6-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#bdf4ff" />
+            <stop offset="100%" stop-color="#8b7cff" />
+          </linearGradient>
+        </defs>
+        <circle cx="224" cy="132" r="54" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
+        <circle cx="224" cy="112" r="18" fill="rgba(229,235,255,0.92)" />
+        <path d="M192 164c10-20 54-20 64 0" stroke="rgba(189,244,255,0.42)" stroke-width="12" stroke-linecap="round" fill="none" />
+        <rect x="310" y="56" width="120" height="152" rx="28" fill="rgba(23,31,51,0.96)" stroke="rgba(221,183,255,0.16)" />
+        <path d="M370 86c-22 0-40 18-40 40v16c0 18 18 32 40 32s40-14 40-32v-16c0-22-18-40-40-40Z" fill="url(#grad-s6-a)" opacity="0.9" />
+        <rect x="352" y="124" width="36" height="54" rx="18" fill="#0f1728" />
+        <path d="M430 132h88" stroke="rgba(189,244,255,0.38)" stroke-width="4" stroke-dasharray="8 10" />
+        <rect x="520" y="98" width="126" height="68" rx="24" fill="rgba(23,31,51,0.88)" stroke="rgba(189,244,255,0.16)" />
+        <path d="M554 132h58" stroke="rgba(229,235,255,0.9)" stroke-width="10" stroke-linecap="round" />
+      </svg>
+    `,
+    'session-7': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s7-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#6ce7ff" />
+            <stop offset="100%" stop-color="#a06dff" />
+          </linearGradient>
+        </defs>
+        <rect x="58" y="76" width="148" height="108" rx="24" fill="rgba(23,31,51,0.94)" stroke="rgba(189,244,255,0.16)" />
+        <rect x="88" y="104" width="88" height="14" rx="7" fill="rgba(229,235,255,0.92)" />
+        <rect x="88" y="132" width="62" height="12" rx="6" fill="rgba(189,244,255,0.3)" />
+        <path d="M206 130h90" stroke="url(#grad-s7-a)" stroke-width="4" stroke-dasharray="8 10" />
+        <circle cx="360" cy="130" r="64" fill="rgba(23,31,51,0.94)" stroke="rgba(189,244,255,0.16)" />
+        <path d="M334 130h52" stroke="rgba(229,235,255,0.92)" stroke-width="12" stroke-linecap="round" />
+        <path d="M360 104v52" stroke="rgba(189,244,255,0.7)" stroke-width="12" stroke-linecap="round" />
+        <path d="M424 130h90" stroke="url(#grad-s7-a)" stroke-width="4" stroke-dasharray="8 10" />
+        <rect x="514" y="76" width="148" height="108" rx="24" fill="rgba(23,31,51,0.9)" stroke="rgba(221,183,255,0.16)" />
+        <path d="M548 104h80M548 132h46M548 160h66" stroke="rgba(229,235,255,0.9)" stroke-width="10" stroke-linecap="round" />
+      </svg>
+    `,
+    'session-8': `
+      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-s8-a" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#bdf4ff" />
+            <stop offset="100%" stop-color="#d08aff" />
+          </linearGradient>
+          <linearGradient id="grad-s8-b" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7df0b7" />
+            <stop offset="100%" stop-color="#6ce7ff" />
+          </linearGradient>
+        </defs>
+        <circle cx="362" cy="132" r="78" fill="rgba(23,31,51,0.96)" stroke="rgba(189,244,255,0.14)" />
+        <circle cx="362" cy="132" r="34" fill="url(#grad-s8-a)" opacity="0.9" />
+        <path d="M362 60V26M362 238v-34M290 132h-34M468 132h34M309 79l-24-24M415 185l24 24M415 79l24-24M309 185l-24 24" stroke="rgba(189,244,255,0.32)" stroke-width="3" stroke-linecap="round" />
+        <rect x="76" y="96" width="138" height="72" rx="24" fill="rgba(23,31,51,0.9)" stroke="rgba(221,183,255,0.16)" />
+        <path d="M112 132h66" stroke="rgba(229,235,255,0.9)" stroke-width="10" stroke-linecap="round" />
+        <path d="M214 132h70" stroke="url(#grad-s8-b)" stroke-width="4" stroke-dasharray="8 10" />
+        <rect x="510" y="70" width="144" height="52" rx="20" fill="rgba(23,31,51,0.88)" stroke="rgba(125,240,183,0.18)" />
+        <rect x="510" y="140" width="144" height="52" rx="20" fill="rgba(23,31,51,0.78)" stroke="rgba(189,244,255,0.18)" />
+        <path d="M544 96h76M544 166h76" stroke="rgba(229,235,255,0.88)" stroke-width="10" stroke-linecap="round" />
+        <path d="M440 132h70" stroke="url(#grad-s8-b)" stroke-width="4" stroke-dasharray="8 10" />
+      </svg>
+    `,
+  };
+
+  return `
+    <div class="lesson-canvas-artwork" aria-hidden="true">
+      ${artworkMap[lesson.id] ?? artworkMap['session-1']}
+    </div>
+  `;
+}
+
 function progressSummary() {
   const completedCount = courseLessons.filter((lesson) => isLessonComplete(lesson.id)).length;
   const percent = Math.round((completedCount / totalLessons) * 100);
@@ -270,8 +470,6 @@ function classroomHero() {
 }
 
 function classroomSidebar() {
-  const activeLessonId = getState().lastVisitedLessonId ?? nextLesson().id;
-
   return `
     <aside class="dashboard-sidebar">
       <div class="dashboard-sidebar-head">
@@ -281,10 +479,9 @@ function classroomSidebar() {
       <nav class="dashboard-session-nav" aria-label="세션 탐색">
         ${courseLessons
           .map((lesson) => {
-            const active = lesson.id === activeLessonId;
             return `
               <button
-                class="dashboard-session-link ${active ? 'active' : ''}"
+                class="dashboard-session-link"
                 type="button"
                 data-route="#/lesson/${lesson.id}"
               >
@@ -479,6 +676,7 @@ function renderLesson(lesson: CourseLesson) {
               <h2>${lesson.promise}</h2>
               <p>${lesson.learningGoal}</p>
             </div>
+            ${renderSessionArtwork(lesson)}
             <div class="lesson-canvas-meta">
               <div>
                 <span>Duration</span>
