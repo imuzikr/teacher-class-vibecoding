@@ -1,5 +1,5 @@
 import './style.css';
-import { appName, courseLabel, courseLessons, galleryStudents } from './data.ts';
+import { appName, courseLabel, courseLessons } from './data.ts';
 import {
   clearLessonThumbnail,
   fetchGalleryRecords,
@@ -491,11 +491,7 @@ function toGalleryStudent(record: FirebaseGalleryRecord): GalleryStudent {
 }
 
 function activeGalleryStudents() {
-  if (firebaseGalleryStudents.length > 0) {
-    return firebaseGalleryStudents;
-  }
-
-  return galleryStudents;
+  return firebaseGalleryStudents;
 }
 
 async function refreshGalleryStudents() {
@@ -977,7 +973,7 @@ function renderGallery() {
   const selectedStudent = currentGalleryStudent(route, galleryStudentList) ?? galleryStudentList[0];
   const selectedLesson = currentGalleryLesson(route) ?? courseLessons[0];
 
-  if (!selectedStudent && isStudentMode) {
+  if (galleryStudentList.length === 0) {
     return `
       <main class="gallery-page">
         <aside class="gallery-sidebar">
@@ -985,13 +981,17 @@ function renderGallery() {
             <strong>수강생 Gallery</strong>
             <p>학생별 결과물과 차시별 결과물을 두 가지 관점으로 비교해 볼 수 있습니다.</p>
           </div>
+          <div class="gallery-sidebar-tabs" role="tablist" aria-label="갤러리 보기 전환">
+            <button class="gallery-sidebar-tab ${isStudentMode ? 'active' : ''}" type="button" data-route="#/gallery/student">학생</button>
+            <button class="gallery-sidebar-tab ${!isStudentMode ? 'active' : ''}" type="button" data-route="#/gallery/lesson">차시</button>
+          </div>
         </aside>
         <section class="gallery-main">
           <section class="gallery-hero">
             <div class="gallery-hero-copy">
-              <span class="gallery-kicker">Student Gallery</span>
+              <span class="gallery-kicker">${isStudentMode ? 'Student Gallery' : 'Session Gallery'}</span>
               <h1>아직 불러온 수강생 데이터가 없습니다</h1>
-              <p>로그인 후 차시 제출을 저장하면 이 영역에 실제 수강생 목록이 표시됩니다.</p>
+              <p>로그인 후 차시 제출을 저장하면 이 영역에 실제 수강생 목록과 차시별 결과물이 표시됩니다.</p>
             </div>
           </section>
         </section>
