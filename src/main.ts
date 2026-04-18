@@ -18,11 +18,8 @@ import {
   getState,
   getLessonPreview,
   getLessonSubmission,
-  isLessonComplete,
   replaceState,
-  resetProgress,
   setLastVisitedLesson,
-  toggleLessonComplete,
   updateLessonPreview,
   updateLessonSubmission,
 } from './storage.ts';
@@ -384,8 +381,25 @@ function renderSessionArtwork(lesson: CourseLesson) {
   `;
 }
 
+function lessonHasSavedWork(lessonId: string) {
+  const state = getState();
+  const draft = state.submissionsByLesson[lessonId];
+  const preview = state.previewsByLesson[lessonId];
+
+  return Boolean(
+    draft?.problemStatement?.trim() ||
+      draft?.promptText?.trim() ||
+      draft?.reflectionNote?.trim() ||
+      draft?.resultLink?.trim() ||
+      preview?.title?.trim() ||
+      preview?.description?.trim() ||
+      preview?.image?.trim() ||
+      preview?.url?.trim(),
+  );
+}
+
 function progressSummary() {
-  const completedCount = courseLessons.filter((lesson) => isLessonComplete(lesson.id)).length;
+  const completedCount = courseLessons.filter((lesson) => lessonHasSavedWork(lesson.id)).length;
   const percent = Math.round((completedCount / totalLessons) * 100);
 
   return {
@@ -446,7 +460,21 @@ function toGallerySubmission(record: FirebaseGalleryRecord, lesson: CourseLesson
 }
 
 function toGalleryStudent(record: FirebaseGalleryRecord): GalleryStudent {
-  const completedCount = record.state?.completedLessonIds?.length ?? 0;
+  const completedCount = courseLessons.filter((lesson) => {
+    const draft = record.state?.submissionsByLesson?.[lesson.id];
+    const preview = record.state?.previewsByLesson?.[lesson.id];
+
+    return Boolean(
+      draft?.problemStatement?.trim() ||
+        draft?.promptText?.trim() ||
+        draft?.reflectionNote?.trim() ||
+        draft?.resultLink?.trim() ||
+        preview?.title?.trim() ||
+        preview?.description?.trim() ||
+        preview?.image?.trim() ||
+        preview?.url?.trim(),
+    );
+  }).length;
 
   return {
     id: record.uid,
@@ -827,7 +855,6 @@ function classroomSidebar() {
       <div class="dashboard-sidebar-tools">
         <button class="dashboard-resource-button" type="button" data-route="#/gallery">Gallery</button>
         <button class="dashboard-tool-link" type="button" data-route="#/">Docs</button>
-        <button class="dashboard-tool-link" type="button" data-action="reset-progress">Reset Progress</button>
       </div>
       <div class="dashboard-profile">
         <div class="dashboard-profile-avatar">VC</div>
@@ -848,7 +875,7 @@ function classroomCards() {
     <section class="dashboard-card-grid">
       ${courseLessons
         .map((lesson) => {
-            const completed = isLessonComplete(lesson.id);
+            const completed = lessonHasSavedWork(lesson.id);
             return `
               <article class="curriculum-card ${completed ? 'completed' : ''}" data-route="#/lesson/${lesson.id}" tabindex="0" role="link" aria-label="${lesson.title} 상세 페이지로 이동">
                 <span class="curriculum-card-label">${lesson.session}차시</span>
@@ -1245,7 +1272,6 @@ function renderGallery() {
 }
 
 function renderLesson(lesson: CourseLesson) {
-  const completed = isLessonComplete(lesson.id);
   const prevLesson = previousLessonFor(lesson);
   const upcomingLesson = nextLessonFor(lesson);
   const summary = progressSummary();
@@ -1311,7 +1337,6 @@ function renderLesson(lesson: CourseLesson) {
           <button class="lesson-anchor-link" type="button" data-jump="lesson-practice">Practice Flow</button>
           <button class="lesson-anchor-link" type="button" data-jump="lesson-readings">Reading Notes</button>
           <button class="lesson-anchor-link" type="button" data-jump="lesson-submission">Project Submission</button>
-          <button class="lesson-anchor-link" type="button" data-jump="lesson-completion">Completion</button>
         </nav>
         <article class="lesson-nextup-panel">
           <p>Next up: ${upcomingLesson ? upcomingLesson.title : '강의실 돌아가기'}</p>
@@ -1631,14 +1656,11 @@ function renderLesson(lesson: CourseLesson) {
               </div>
             </article>
 
-            <article class="lesson-side-panel" id="lesson-completion">
+            <article class="lesson-side-panel">
               <div class="lesson-panel-head">
-                <h2>Completion</h2>
+                <h2>Next Step</h2>
               </div>
-              <p class="lesson-completion-copy">${completed ? '완료한 차시입니다. 필요하면 다시 학습해도 좋습니다.' : '완료 체크를 남기면 대시보드 진행률에 바로 반영됩니다.'}</p>
-              <button class="lesson-complete-button" type="button" data-action="toggle-complete" data-lesson-id="${lesson.id}">
-                ${completed ? 'Mark as In Progress' : 'Mark as Complete'}
-              </button>
+              <p class="lesson-completion-copy">현재 차시 저장이 끝나면 다음 차시로 넘어가거나 대시보드로 돌아가 흐름을 이어갈 수 있습니다.</p>
               <div class="lesson-nav-buttons">
                 ${
                   prevLesson
@@ -1910,22 +1932,6 @@ app.addEventListener('click', async (event) => {
     return;
   }
 
-  if (action === 'toggle-complete') {
-    const lessonId = actionTarget.dataset.lessonId;
-    if (!lessonId) {
-      return;
-    }
-    toggleLessonComplete(lessonId);
-    void syncStateToCloud();
-    render();
-    return;
-  }
-
-  if (action === 'reset-progress') {
-    resetProgress();
-    void syncStateToCloud();
-    render();
-  }
 });
 
 app.addEventListener('keydown', (event) => {

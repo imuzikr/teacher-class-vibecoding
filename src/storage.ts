@@ -62,21 +62,6 @@ export function replaceState(nextState: Partial<PersistedState>) {
   sync(normalizeState(nextState));
 }
 
-export function isLessonComplete(lessonId: string) {
-  return state.completedLessonIds.includes(lessonId);
-}
-
-export function toggleLessonComplete(lessonId: string) {
-  const completedLessonIds = isLessonComplete(lessonId)
-    ? state.completedLessonIds.filter((id) => id !== lessonId)
-    : [...state.completedLessonIds, lessonId];
-
-  sync({
-    ...state,
-    completedLessonIds,
-  });
-}
-
 export function setLastVisitedLesson(lessonId: string) {
   sync({
     ...state,
@@ -127,8 +112,4 @@ export function clearLessonPreview(lessonId: string) {
     ...state,
     previewsByLesson: nextPreviews,
   });
-}
-
-export function resetProgress() {
-  sync({ ...initialState });
 }
