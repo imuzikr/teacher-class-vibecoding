@@ -98,6 +98,14 @@ export async function signOutFromFirebase() {
   await signOut(auth);
 }
 
+export async function getCurrentUserIdToken() {
+  if (!auth?.currentUser) {
+    return null;
+  }
+
+  return auth.currentUser.getIdToken();
+}
+
 export async function loadUserState(uid: string) {
   if (!db) {
     return null;

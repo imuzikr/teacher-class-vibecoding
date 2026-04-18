@@ -3,6 +3,7 @@ import { appName, courseLabel, courseLessons } from './data.ts';
 import {
   clearLessonThumbnail,
   fetchGalleryRecords,
+  getCurrentUserIdToken,
   hasFirebaseConfig,
   loadUserState,
   saveLessonThumbnail,
@@ -304,13 +305,28 @@ function normalizeUrl(link: string) {
   return `https://${trimmed}`;
 }
 
+async function authorizedApiHeaders() {
+  const idToken = await getCurrentUserIdToken();
+
+  if (!idToken) {
+    throw new Error('로그인이 필요합니다.');
+  }
+
+  return {
+    authorization: `Bearer ${idToken}`,
+  };
+}
+
 async function fetchLinkPreview(link: string) {
   const normalized = normalizeUrl(link);
   if (!normalized) {
     throw new Error('링크가 비어 있습니다.');
   }
 
-  const response = await fetch(`${serverlessApiBase}/api/link-preview?url=${encodeURIComponent(normalized)}`);
+  const headers = await authorizedApiHeaders();
+  const response = await fetch(`${serverlessApiBase}/api/link-preview?url=${encodeURIComponent(normalized)}`, {
+    headers,
+  });
   if (!response.ok) {
     throw new Error('미리보기 정보를 가져오지 못했습니다.');
   }
@@ -324,7 +340,10 @@ async function fetchLinkThumbnail(link: string) {
     throw new Error('링크가 비어 있습니다.');
   }
 
-  const response = await fetch(`${serverlessApiBase}/api/link-thumbnail?url=${encodeURIComponent(normalized)}`);
+  const headers = await authorizedApiHeaders();
+  const response = await fetch(`${serverlessApiBase}/api/link-thumbnail?url=${encodeURIComponent(normalized)}`, {
+    headers,
+  });
   if (!response.ok) {
     throw new Error('썸네일 이미지를 가져오지 못했습니다.');
   }
@@ -1874,6 +1893,7 @@ app.addEventListener('click', async (event) => {
     savedSubmissionKeys.add(submissionFieldKey(lessonId, field));
     if (field === 'resultLink') {
       const normalizedLink = normalizeUrl(fieldElement.value);
+      const existingPreview = getLessonPreview(lessonId);
       if (!normalizedLink) {
         clearLessonPreview(lessonId);
         if (currentUser) {
@@ -1889,10 +1909,21 @@ app.addEventListener('click', async (event) => {
         return;
       }
 
+      if (existingPreview?.url?.trim() === normalizedLink) {
+        lastPreviewStatus = {
+          lessonId,
+          state: 'success',
+          message: '같은 링크가 이미 저장되어 있어 기존 미리보기를 재사용했습니다.',
+        };
+        void syncStateToCloud();
+        render();
+        return;
+      }
+
       lastPreviewStatus = {
         lessonId,
         state: 'loading',
-        message: '배포 후에는 이 링크의 메타데이터를 불러와 미리보기를 보여줍니다.',
+        message: '링크 미리보기와 썸네일을 생성하고 있습니다.',
       };
       render();
 

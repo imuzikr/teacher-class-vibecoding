@@ -1,5 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
+import { requireAuthenticatedUser } from './_firebase-auth.js';
 
 export const config = {
   maxDuration: 60,
@@ -14,6 +15,11 @@ async function wait(milliseconds) {
 }
 
 export default async function handler(request, response) {
+  const authenticatedUser = await requireAuthenticatedUser(request, response);
+  if (!authenticatedUser) {
+    return;
+  }
+
   const rawUrl = request.query?.url;
   const url = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
 

@@ -1,3 +1,5 @@
+import { requireAuthenticatedUser } from './_firebase-auth.js';
+
 function extractMetaTag(html, key, attribute = 'property') {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(
@@ -37,6 +39,11 @@ function toAbsoluteUrl(url, baseUrl) {
 }
 
 export default async function handler(request, response) {
+  const authenticatedUser = await requireAuthenticatedUser(request, response);
+  if (!authenticatedUser) {
+    return;
+  }
+
   const rawUrl = request.query?.url;
   const url = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
 
