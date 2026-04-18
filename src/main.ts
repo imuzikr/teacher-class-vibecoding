@@ -1,17 +1,38 @@
 import './style.css';
-import { appName, courseLabel, courseLessons } from './data.ts';
+import { appName, courseLabel, courseLessons, galleryStudents } from './data.ts';
+import {
+  fetchGalleryRecords,
+  hasFirebaseConfig,
+  loadUserState,
+  saveUserState,
+  signInWithEmail,
+  signInWithGoogle,
+  signUpWithEmail,
+  signOutFromFirebase,
+  subscribeToAuth,
+} from './firebase.ts';
 import {
   clearLessonPreview,
+  getState,
   getLessonPreview,
   getLessonSubmission,
   isLessonComplete,
+  replaceState,
   resetProgress,
   setLastVisitedLesson,
   toggleLessonComplete,
   updateLessonPreview,
   updateLessonSubmission,
 } from './storage.ts';
-import type { AppRoute, CourseLesson, LinkPreviewData } from './types.ts';
+import type {
+  AppRoute,
+  AuthenticatedUser,
+  CourseLesson,
+  FirebaseGalleryRecord,
+  GalleryStudent,
+  GallerySubmission,
+  LinkPreviewData,
+} from './types.ts';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 
@@ -24,14 +45,126 @@ document.title = `${appName} | 초보자용 8차시 코스`;
 
 const app = appRoot;
 const totalLessons = courseLessons.length;
-let lastSavedSubmissionKey: string | null = null;
+const savedSubmissionKeys = new Set<string>();
 let lastPreviewStatus: { lessonId: string; state: 'idle' | 'loading' | 'success' | 'error'; message: string } | null = null;
+let currentUser: AuthenticatedUser | null = null;
+let authReady = !hasFirebaseConfig;
+let hydratedUserId: string | null = null;
+let firebaseGalleryStudents: GalleryStudent[] = [];
+let authModalOpen = false;
+let authMode: 'login' | 'signup' = 'login';
+let authSubmitting = false;
+let authErrorMessage = '';
+
+function submissionFieldKey(lessonId: string, field: string) {
+  return `${lessonId}:${field}`;
+}
+
+function submissionFieldMessages(field: string) {
+  switch (field) {
+    case 'problemStatement':
+      return {
+        idle: '입력 후 저장 버튼을 눌러 반영하세요.',
+        saved: '문제 정의가 저장되었습니다.',
+      };
+    case 'promptText':
+      return {
+        idle: '입력 후 저장 버튼을 눌러 반영하세요.',
+        saved: '프롬프트가 저장되었습니다.',
+      };
+    case 'resultLink':
+      return {
+        idle: '링크 저장 후 결과물 카드가 업데이트됩니다.',
+        saved: '결과물 링크가 저장되었습니다. 아래 미리보기를 확인해 보세요.',
+      };
+    case 'reflectionNote':
+      return {
+        idle: '입력 후 저장 버튼을 눌러 반영하세요.',
+        saved: '오늘 남기는 한 마디가 저장되었습니다.',
+      };
+    default:
+      return {
+        idle: '입력 후 저장 버튼을 눌러 반영하세요.',
+        saved: '저장되었습니다.',
+      };
+  }
+}
+
+function isProtectedRoute(route: AppRoute) {
+  return route.view === 'lesson' || route.view === 'gallery';
+}
+
+function openAuthModal(mode: 'login' | 'signup') {
+  authModalOpen = true;
+  authMode = mode;
+  authErrorMessage = '';
+  render();
+}
+
+function closeAuthModal() {
+  authModalOpen = false;
+  authErrorMessage = '';
+  authSubmitting = false;
+}
+
+function authErrorToMessage(error: unknown) {
+  if (typeof error === 'object' && error && 'code' in error) {
+    const code = String((error as { code?: string }).code ?? '');
+    switch (code) {
+      case 'auth/email-already-in-use':
+        return '이미 사용 중인 이메일입니다.';
+      case 'auth/invalid-email':
+        return '이메일 형식을 다시 확인해 주세요.';
+      case 'auth/weak-password':
+        return '비밀번호는 조금 더 길고 안전하게 설정해 주세요.';
+      case 'auth/invalid-credential':
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+        return '이메일 또는 비밀번호를 다시 확인해 주세요.';
+      case 'auth/popup-closed-by-user':
+        return '로그인 창이 닫혔습니다. 다시 시도해 주세요.';
+      case 'auth/popup-blocked':
+        return '브라우저에서 로그인 팝업이 차단되었습니다.';
+      default:
+        break;
+    }
+  }
+
+  return '인증 처리 중 오류가 발생했습니다. 다시 시도해 주세요.';
+}
 
 function parseRoute(): AppRoute {
   const hash = window.location.hash.replace(/^#/, '');
 
   if (hash === '/classroom') {
     return { view: 'classroom' };
+  }
+
+  if (hash === '/gallery') {
+    return { view: 'gallery', mode: 'student' };
+  }
+
+  if (hash.startsWith('/gallery/student/')) {
+    const studentId = hash.replace('/gallery/student/', '').trim();
+    if (studentId) {
+      return { view: 'gallery', mode: 'student', studentId };
+    }
+  }
+
+  if (hash === '/gallery/student') {
+    return { view: 'gallery', mode: 'student' };
+  }
+
+  if (hash.startsWith('/gallery/lesson/')) {
+    const lessonId = hash.replace('/gallery/lesson/', '').trim();
+    const lesson = courseLessons.find((item) => item.id === lessonId);
+    if (lesson) {
+      return { view: 'gallery', mode: 'lesson', lessonId: lesson.id };
+    }
+  }
+
+  if (hash === '/gallery/lesson') {
+    return { view: 'gallery', mode: 'lesson' };
   }
 
   if (hash.startsWith('/lesson/')) {
@@ -46,12 +179,51 @@ function parseRoute(): AppRoute {
 }
 
 function navigateTo(route: string) {
+  const nextHash = route.replace(/^#/, '');
+  if (!currentUser && (nextHash.startsWith('/lesson/') || nextHash.startsWith('/gallery'))) {
+    openAuthModal('login');
+    return;
+  }
+
   if (window.location.hash === route) {
     render();
     return;
   }
 
   window.location.hash = route;
+}
+
+function resetFieldSaveVisual(target: HTMLElement) {
+  const fieldElement = target.closest<HTMLTextAreaElement | HTMLInputElement>('[data-submission-field]');
+  if (!fieldElement) {
+    return;
+  }
+
+  const lessonId = fieldElement.dataset.submissionLesson;
+  const field = fieldElement.dataset.submissionField;
+  if (!lessonId || !field) {
+    return;
+  }
+
+  savedSubmissionKeys.delete(submissionFieldKey(lessonId, field));
+
+  const fieldContainer = fieldElement.closest('.lesson-form-field');
+  if (!fieldContainer) {
+    return;
+  }
+
+  const saveButton = fieldContainer.querySelector<HTMLButtonElement>('.lesson-inline-save-button');
+  const statusText = fieldContainer.querySelector<HTMLElement>('.lesson-inline-save-status');
+
+  saveButton?.classList.remove('is-saved');
+  if (saveButton) {
+    saveButton.textContent = 'Save';
+  }
+
+  if (statusText) {
+    statusText.classList.remove('visible');
+    statusText.textContent = statusText.dataset.defaultStatus ?? '입력 후 저장 버튼을 눌러 반영하세요.';
+  }
 }
 
 function scrollToSection(sectionId: string) {
@@ -152,198 +324,6 @@ function truncateSessionLabel(title: string, maxLength = 22) {
 
 function renderSessionArtwork(lesson: CourseLesson) {
   const generatedImagePath = `/session-artworks/${lesson.id}.png`;
-  const artworkMap: Record<string, string> = {
-    'session-1': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s1-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#bdf4ff" stop-opacity="0.95" />
-            <stop offset="100%" stop-color="#8b7cff" stop-opacity="0.85" />
-          </linearGradient>
-          <linearGradient id="grad-s1-b" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#25314a" />
-            <stop offset="100%" stop-color="#111a2c" />
-          </linearGradient>
-        </defs>
-        <rect x="22" y="40" width="216" height="138" rx="20" fill="url(#grad-s1-b)" stroke="rgba(189,244,255,0.18)" />
-        <rect x="56" y="70" width="148" height="18" rx="9" fill="rgba(189,244,255,0.18)" />
-        <rect x="56" y="104" width="110" height="14" rx="7" fill="rgba(221,183,255,0.34)" />
-        <rect x="56" y="132" width="128" height="14" rx="7" fill="rgba(229,235,255,0.18)" />
-        <circle cx="326" cy="108" r="42" fill="url(#grad-s1-a)" opacity="0.9" />
-        <path d="M304 108h44M326 86v44" stroke="#0e1628" stroke-width="10" stroke-linecap="round" />
-        <rect x="414" y="30" width="264" height="92" rx="22" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
-        <rect x="414" y="138" width="264" height="92" rx="22" fill="rgba(23,31,51,0.78)" stroke="rgba(221,183,255,0.16)" />
-        <rect x="448" y="58" width="178" height="16" rx="8" fill="rgba(229,235,255,0.92)" />
-        <rect x="448" y="86" width="120" height="12" rx="6" fill="rgba(189,244,255,0.26)" />
-        <rect x="448" y="166" width="152" height="16" rx="8" fill="rgba(229,235,255,0.85)" />
-        <rect x="448" y="194" width="98" height="12" rx="6" fill="rgba(221,183,255,0.34)" />
-        <path d="M238 108C258 108 273 108 284 108" stroke="rgba(189,244,255,0.45)" stroke-width="3" stroke-dasharray="8 10" />
-        <path d="M368 108C385 108 402 92 414 76" stroke="rgba(189,244,255,0.45)" stroke-width="3" stroke-dasharray="8 10" fill="none" />
-        <path d="M368 108C385 108 402 152 414 184" stroke="rgba(221,183,255,0.38)" stroke-width="3" stroke-dasharray="8 10" fill="none" />
-      </svg>
-    `,
-    'session-2': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s2-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#6ce7ff" />
-            <stop offset="100%" stop-color="#8b7cff" />
-          </linearGradient>
-        </defs>
-        <rect x="34" y="34" width="260" height="182" rx="24" fill="rgba(23,31,51,0.9)" stroke="rgba(189,244,255,0.16)" />
-        <path d="M34 86h260M120 34v182M206 34v182" stroke="rgba(189,244,255,0.14)" />
-        <circle cx="78" cy="60" r="10" fill="rgba(189,244,255,0.72)" />
-        <rect x="56" y="104" width="42" height="18" rx="9" fill="rgba(221,183,255,0.42)" />
-        <rect x="136" y="104" width="42" height="18" rx="9" fill="rgba(189,244,255,0.32)" />
-        <rect x="222" y="104" width="42" height="18" rx="9" fill="rgba(229,235,255,0.24)" />
-        <rect x="56" y="146" width="42" height="18" rx="9" fill="rgba(221,183,255,0.26)" />
-        <rect x="136" y="146" width="42" height="18" rx="9" fill="rgba(189,244,255,0.5)" />
-        <rect x="222" y="146" width="42" height="18" rx="9" fill="rgba(229,235,255,0.24)" />
-        <path d="M294 125H374" stroke="rgba(189,244,255,0.38)" stroke-width="4" stroke-dasharray="10 10" />
-        <path d="M374 74h162l40 36-40 36H374z" fill="rgba(23,31,51,0.9)" stroke="rgba(221,183,255,0.26)" />
-        <path d="M406 104h98" stroke="url(#grad-s2-a)" stroke-width="6" stroke-linecap="round" />
-        <path d="M554 74v72" stroke="rgba(221,183,255,0.16)" />
-        <path d="M402 156h162l40 36-40 36H402z" fill="rgba(23,31,51,0.78)" stroke="rgba(189,244,255,0.18)" />
-        <path d="M438 188h96" stroke="rgba(229,235,255,0.9)" stroke-width="6" stroke-linecap="round" />
-        <circle cx="640" cy="110" r="22" fill="url(#grad-s2-a)" opacity="0.92" />
-        <circle cx="640" cy="192" r="16" fill="rgba(221,183,255,0.54)" />
-      </svg>
-    `,
-    'session-3': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s3-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#bdf4ff" />
-            <stop offset="100%" stop-color="#a06dff" />
-          </linearGradient>
-        </defs>
-        <circle cx="360" cy="130" r="62" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.18)" />
-        <circle cx="360" cy="130" r="22" fill="url(#grad-s3-a)" />
-        <ellipse cx="360" cy="130" rx="180" ry="54" fill="none" stroke="rgba(189,244,255,0.32)" stroke-width="2.5" />
-        <ellipse cx="360" cy="130" rx="124" ry="98" fill="none" stroke="rgba(221,183,255,0.22)" stroke-width="2.5" transform="rotate(-18 360 130)" />
-        <ellipse cx="360" cy="130" rx="124" ry="98" fill="none" stroke="rgba(189,244,255,0.16)" stroke-width="2.5" transform="rotate(18 360 130)" />
-        <rect x="90" y="96" width="112" height="68" rx="18" fill="rgba(23,31,51,0.86)" stroke="rgba(189,244,255,0.16)" />
-        <rect x="518" y="56" width="112" height="68" rx="18" fill="rgba(23,31,51,0.86)" stroke="rgba(221,183,255,0.2)" />
-        <rect x="510" y="164" width="120" height="58" rx="18" fill="rgba(23,31,51,0.72)" stroke="rgba(189,244,255,0.14)" />
-        <circle cx="146" cy="130" r="9" fill="rgba(189,244,255,0.9)" />
-        <circle cx="574" cy="90" r="9" fill="rgba(221,183,255,0.9)" />
-        <circle cx="570" cy="193" r="9" fill="rgba(189,244,255,0.72)" />
-      </svg>
-    `,
-    'session-4': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s4-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#6ce7ff" />
-            <stop offset="100%" stop-color="#d08aff" />
-          </linearGradient>
-        </defs>
-        <rect x="48" y="38" width="194" height="132" rx="22" fill="rgba(23,31,51,0.94)" stroke="rgba(189,244,255,0.16)" />
-        <rect x="80" y="70" width="120" height="16" rx="8" fill="rgba(229,235,255,0.92)" />
-        <rect x="80" y="100" width="88" height="12" rx="6" fill="rgba(221,183,255,0.42)" />
-        <rect x="80" y="126" width="132" height="12" rx="6" fill="rgba(189,244,255,0.24)" />
-        <rect x="182" y="88" width="248" height="148" rx="24" fill="rgba(23,31,51,0.78)" stroke="rgba(221,183,255,0.14)" />
-        <rect x="238" y="122" width="136" height="12" rx="6" fill="rgba(229,235,255,0.88)" />
-        <rect x="238" y="148" width="110" height="12" rx="6" fill="rgba(189,244,255,0.26)" />
-        <rect x="238" y="174" width="150" height="12" rx="6" fill="rgba(221,183,255,0.32)" />
-        <path d="M430 162h72" stroke="url(#grad-s4-a)" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 10" />
-        <rect x="514" y="102" width="148" height="118" rx="24" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
-        <path d="M548 136h44M548 160h78M548 184h58" stroke="rgba(229,235,255,0.86)" stroke-width="10" stroke-linecap="round" />
-        <circle cx="596" cy="70" r="26" fill="url(#grad-s4-a)" opacity="0.95" />
-      </svg>
-    `,
-    'session-5': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s5-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#bdf4ff" />
-            <stop offset="100%" stop-color="#7df0b7" />
-          </linearGradient>
-          <linearGradient id="grad-s5-b" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#8b7cff" />
-            <stop offset="100%" stop-color="#6ce7ff" />
-          </linearGradient>
-        </defs>
-        <rect x="82" y="78" width="126" height="108" rx="24" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
-        <rect x="118" y="106" width="54" height="14" rx="7" fill="rgba(229,235,255,0.88)" />
-        <rect x="118" y="132" width="42" height="12" rx="6" fill="rgba(189,244,255,0.3)" />
-        <circle cx="360" cy="132" r="56" fill="rgba(23,31,51,0.96)" stroke="rgba(125,240,183,0.28)" />
-        <circle cx="360" cy="132" r="18" fill="url(#grad-s5-a)" />
-        <circle cx="360" cy="132" r="92" fill="none" stroke="rgba(189,244,255,0.14)" stroke-dasharray="6 10" />
-        <rect x="512" y="66" width="126" height="72" rx="20" fill="rgba(23,31,51,0.9)" stroke="rgba(108,231,255,0.18)" />
-        <rect x="512" y="154" width="126" height="72" rx="20" fill="rgba(23,31,51,0.82)" stroke="rgba(139,124,255,0.18)" />
-        <rect x="548" y="92" width="54" height="12" rx="6" fill="rgba(229,235,255,0.88)" />
-        <rect x="548" y="180" width="54" height="12" rx="6" fill="rgba(229,235,255,0.88)" />
-        <path d="M208 132h96" stroke="url(#grad-s5-b)" stroke-width="4" stroke-dasharray="8 10" />
-        <path d="M416 132h96" stroke="url(#grad-s5-b)" stroke-width="4" stroke-dasharray="8 10" />
-        <circle cx="302" cy="132" r="7" fill="#6ce7ff" />
-        <circle cx="418" cy="132" r="7" fill="#7df0b7" />
-      </svg>
-    `,
-    'session-6': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s6-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#bdf4ff" />
-            <stop offset="100%" stop-color="#8b7cff" />
-          </linearGradient>
-        </defs>
-        <circle cx="224" cy="132" r="54" fill="rgba(23,31,51,0.92)" stroke="rgba(189,244,255,0.16)" />
-        <circle cx="224" cy="112" r="18" fill="rgba(229,235,255,0.92)" />
-        <path d="M192 164c10-20 54-20 64 0" stroke="rgba(189,244,255,0.42)" stroke-width="12" stroke-linecap="round" fill="none" />
-        <rect x="310" y="56" width="120" height="152" rx="28" fill="rgba(23,31,51,0.96)" stroke="rgba(221,183,255,0.16)" />
-        <path d="M370 86c-22 0-40 18-40 40v16c0 18 18 32 40 32s40-14 40-32v-16c0-22-18-40-40-40Z" fill="url(#grad-s6-a)" opacity="0.9" />
-        <rect x="352" y="124" width="36" height="54" rx="18" fill="#0f1728" />
-        <path d="M430 132h88" stroke="rgba(189,244,255,0.38)" stroke-width="4" stroke-dasharray="8 10" />
-        <rect x="520" y="98" width="126" height="68" rx="24" fill="rgba(23,31,51,0.88)" stroke="rgba(189,244,255,0.16)" />
-        <path d="M554 132h58" stroke="rgba(229,235,255,0.9)" stroke-width="10" stroke-linecap="round" />
-      </svg>
-    `,
-    'session-7': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s7-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#6ce7ff" />
-            <stop offset="100%" stop-color="#a06dff" />
-          </linearGradient>
-        </defs>
-        <rect x="58" y="76" width="148" height="108" rx="24" fill="rgba(23,31,51,0.94)" stroke="rgba(189,244,255,0.16)" />
-        <rect x="88" y="104" width="88" height="14" rx="7" fill="rgba(229,235,255,0.92)" />
-        <rect x="88" y="132" width="62" height="12" rx="6" fill="rgba(189,244,255,0.3)" />
-        <path d="M206 130h90" stroke="url(#grad-s7-a)" stroke-width="4" stroke-dasharray="8 10" />
-        <circle cx="360" cy="130" r="64" fill="rgba(23,31,51,0.94)" stroke="rgba(189,244,255,0.16)" />
-        <path d="M334 130h52" stroke="rgba(229,235,255,0.92)" stroke-width="12" stroke-linecap="round" />
-        <path d="M360 104v52" stroke="rgba(189,244,255,0.7)" stroke-width="12" stroke-linecap="round" />
-        <path d="M424 130h90" stroke="url(#grad-s7-a)" stroke-width="4" stroke-dasharray="8 10" />
-        <rect x="514" y="76" width="148" height="108" rx="24" fill="rgba(23,31,51,0.9)" stroke="rgba(221,183,255,0.16)" />
-        <path d="M548 104h80M548 132h46M548 160h66" stroke="rgba(229,235,255,0.9)" stroke-width="10" stroke-linecap="round" />
-      </svg>
-    `,
-    'session-8': `
-      <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad-s8-a" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#bdf4ff" />
-            <stop offset="100%" stop-color="#d08aff" />
-          </linearGradient>
-          <linearGradient id="grad-s8-b" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#7df0b7" />
-            <stop offset="100%" stop-color="#6ce7ff" />
-          </linearGradient>
-        </defs>
-        <circle cx="362" cy="132" r="78" fill="rgba(23,31,51,0.96)" stroke="rgba(189,244,255,0.14)" />
-        <circle cx="362" cy="132" r="34" fill="url(#grad-s8-a)" opacity="0.9" />
-        <path d="M362 60V26M362 238v-34M290 132h-34M468 132h34M309 79l-24-24M415 185l24 24M415 79l24-24M309 185l-24 24" stroke="rgba(189,244,255,0.32)" stroke-width="3" stroke-linecap="round" />
-        <rect x="76" y="96" width="138" height="72" rx="24" fill="rgba(23,31,51,0.9)" stroke="rgba(221,183,255,0.16)" />
-        <path d="M112 132h66" stroke="rgba(229,235,255,0.9)" stroke-width="10" stroke-linecap="round" />
-        <path d="M214 132h70" stroke="url(#grad-s8-b)" stroke-width="4" stroke-dasharray="8 10" />
-        <rect x="510" y="70" width="144" height="52" rx="20" fill="rgba(23,31,51,0.88)" stroke="rgba(125,240,183,0.18)" />
-        <rect x="510" y="140" width="144" height="52" rx="20" fill="rgba(23,31,51,0.78)" stroke="rgba(189,244,255,0.18)" />
-        <path d="M544 96h76M544 166h76" stroke="rgba(229,235,255,0.88)" stroke-width="10" stroke-linecap="round" />
-        <path d="M440 132h70" stroke="url(#grad-s8-b)" stroke-width="4" stroke-dasharray="8 10" />
-      </svg>
-    `,
-  };
 
   return `
     <div class="lesson-canvas-artwork" aria-hidden="true">
@@ -352,12 +332,8 @@ function renderSessionArtwork(lesson: CourseLesson) {
         src="${generatedImagePath}"
         alt=""
         loading="lazy"
-        onload="this.nextElementSibling?.remove()"
         onerror="this.remove()"
       />
-      <div class="lesson-canvas-fallback-artwork">
-        ${artworkMap[lesson.id] ?? artworkMap['session-1']}
-      </div>
     </div>
   `;
 }
@@ -373,6 +349,240 @@ function progressSummary() {
   };
 }
 
+function galleryRoleFromEmail(email: string) {
+  if (!email) {
+    return '수강생';
+  }
+
+  const normalized = email.toLowerCase();
+  if (normalized.includes('teacher') || normalized.includes('school')) {
+    return '교사';
+  }
+
+  return '수강생';
+}
+
+function toGallerySubmission(record: FirebaseGalleryRecord, lesson: CourseLesson): GallerySubmission {
+  const draft = record.state?.submissionsByLesson?.[lesson.id];
+  const preview = record.state?.previewsByLesson?.[lesson.id];
+  const previewImage = preview?.image?.trim() || '';
+  const previewDomain =
+    preview?.siteName?.trim() || extractHostname(draft?.resultLink?.trim() || '') || '링크 미입력';
+  const hasAnyDraft = Boolean(
+    draft?.problemStatement?.trim() ||
+      draft?.promptText?.trim() ||
+      draft?.reflectionNote?.trim() ||
+      draft?.resultLink?.trim(),
+  );
+
+  const previewStatus: GallerySubmission['previewStatus'] = draft?.resultLink?.trim()
+    ? 'published'
+    : hasAnyDraft
+      ? 'reviewing'
+      : 'draft';
+
+  return {
+    lessonId: lesson.id,
+    problemStatement: draft?.problemStatement?.trim() || '아직 문제 정의를 제출하지 않았습니다.',
+    promptText: draft?.promptText?.trim() || '아직 프롬프트를 제출하지 않았습니다.',
+    resultLink: draft?.resultLink?.trim() || '',
+    previewStatus,
+    previewTitle: preview?.title?.trim() || lesson.title,
+    previewNote:
+      draft?.reflectionNote?.trim() ||
+      preview?.description?.trim() ||
+      (previewStatus === 'draft'
+        ? '아직 제출 전 단계입니다.'
+        : '수업 중 남긴 기록을 바탕으로 결과물을 정리하고 있습니다.'),
+    previewImage,
+    previewDomain,
+  };
+}
+
+function toGalleryStudent(record: FirebaseGalleryRecord): GalleryStudent {
+  const completedCount = record.state?.completedLessonIds?.length ?? 0;
+
+  return {
+    id: record.uid,
+    name: record.displayName || record.email || '학습자',
+    role: galleryRoleFromEmail(record.email),
+    cohort: '2026 상반기',
+    focus: completedCount > 0 ? `${completedCount}개 차시 진행 중` : '첫 제출을 준비 중인 학습자',
+    note:
+      completedCount > 0
+        ? `총 ${completedCount}개 차시의 저장 기록이 있습니다. 제출 흐름과 결과물을 한 번에 확인할 수 있습니다.`
+        : '아직 본격적인 제출 전 단계이지만, Firebase에 계정과 작업 공간이 연결되어 있습니다.',
+    submissions: courseLessons.map((lesson) => toGallerySubmission(record, lesson)),
+  };
+}
+
+function activeGalleryStudents() {
+  if (firebaseGalleryStudents.length > 0) {
+    return firebaseGalleryStudents;
+  }
+
+  return galleryStudents;
+}
+
+async function refreshGalleryStudents() {
+  if (!hasFirebaseConfig || !currentUser) {
+    firebaseGalleryStudents = [];
+    render();
+    return;
+  }
+
+  try {
+    const records = await fetchGalleryRecords();
+    firebaseGalleryStudents = records
+      .map((record) => toGalleryStudent(record))
+      .sort((left, right) => {
+        if (left.id === currentUser?.uid) {
+          return -1;
+        }
+        if (right.id === currentUser?.uid) {
+          return 1;
+        }
+        return left.name.localeCompare(right.name, 'ko');
+      });
+  } catch {
+    firebaseGalleryStudents = [];
+  }
+
+  render();
+}
+
+function userInitials(user: AuthenticatedUser | null) {
+  if (!user?.displayName.trim()) {
+    return 'VC';
+  }
+
+  return user.displayName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((chunk) => chunk[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function authActionsMarkup(compact = false) {
+  const userName = currentUser?.displayName?.trim() || 'Teacher';
+  const avatarLabel = userInitials(currentUser);
+  const className = compact ? 'auth-button compact' : 'auth-button';
+
+  if (!currentUser) {
+    return `
+      <div class="auth-action-group">
+        <button class="${className} ghost" type="button" data-action="open-auth" data-auth-mode="login" ${!authReady ? 'disabled' : ''}>
+          Login
+        </button>
+        <button class="${className}" type="button" data-action="open-auth" data-auth-mode="signup" ${!authReady ? 'disabled' : ''}>
+          회원가입
+        </button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="auth-action-group">
+      <button class="${className} ghost" type="button" data-action="sign-out" ${!authReady ? 'disabled' : ''}>
+        Sign Out
+      </button>
+      <div class="lesson-shell-avatar" title="${userName}">${avatarLabel}</div>
+    </div>
+  `;
+}
+
+function renderAuthModal() {
+  if (!authModalOpen) {
+    return '';
+  }
+
+  return `
+    <div class="auth-modal-backdrop" data-action="close-auth-modal">
+      <section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <button class="auth-modal-close" type="button" data-action="close-auth-modal" aria-label="닫기">×</button>
+        <p class="auth-modal-kicker">Member Access</p>
+        <h2 id="auth-modal-title">${authMode === 'signup' ? '회원가입' : '로그인'}</h2>
+        <p class="auth-modal-copy">
+          ${authMode === 'signup'
+            ? '계정을 만들면 차시별 과제를 저장하고, 갤러리에서 제출 결과를 함께 확인할 수 있습니다.'
+            : '로그인하면 차시 상세 페이지와 갤러리에서 저장된 결과물을 이어서 확인할 수 있습니다.'}
+        </p>
+        <div class="auth-mode-tabs" role="tablist" aria-label="인증 모드 전환">
+          <button class="auth-mode-tab ${authMode === 'login' ? 'active' : ''}" type="button" data-action="switch-auth-mode" data-auth-mode="login">로그인</button>
+          <button class="auth-mode-tab ${authMode === 'signup' ? 'active' : ''}" type="button" data-action="switch-auth-mode" data-auth-mode="signup">회원가입</button>
+        </div>
+        <form class="auth-form" data-auth-form="${authMode}">
+          ${
+            authMode === 'signup'
+              ? `
+                <label class="auth-form-field">
+                  <span>이름</span>
+                  <input type="text" name="displayName" placeholder="이름을 입력해 주세요" required />
+                </label>
+              `
+              : ''
+          }
+          <label class="auth-form-field">
+            <span>이메일</span>
+            <input type="email" name="email" placeholder="teacher@example.com" required />
+          </label>
+          <label class="auth-form-field">
+            <span>비밀번호</span>
+            <input type="password" name="password" placeholder="비밀번호를 입력해 주세요" required />
+          </label>
+          ${
+            authErrorMessage
+              ? `<p class="auth-form-error" role="alert">${authErrorMessage}</p>`
+              : ''
+          }
+          <button class="auth-submit-button" type="submit" ${authSubmitting ? 'disabled' : ''}>
+            ${authSubmitting ? '처리 중...' : authMode === 'signup' ? '회원가입하기' : '로그인하기'}
+          </button>
+        </form>
+        <div class="auth-divider"><span>또는</span></div>
+        <button class="auth-google-button" type="button" data-action="auth-google" ${authSubmitting ? 'disabled' : ''}>
+          Google로 계속하기
+        </button>
+      </section>
+    </div>
+  `;
+}
+
+async function syncStateToCloud() {
+  if (!currentUser || !hasFirebaseConfig) {
+    return;
+  }
+
+  try {
+    await saveUserState(currentUser.uid, getState(), currentUser);
+  } catch {}
+
+  await refreshGalleryStudents();
+  render();
+}
+
+async function hydrateUserState(user: AuthenticatedUser) {
+  if (!hasFirebaseConfig) {
+    return;
+  }
+
+  try {
+    const remoteState = await loadUserState(user.uid);
+
+    if (remoteState) {
+      replaceState(remoteState);
+    } else {
+      await saveUserState(user.uid, getState(), user);
+    }
+
+    hydratedUserId = user.uid;
+    await refreshGalleryStudents();
+  } catch {}
+
+  render();
+}
+
 function currentLesson(route: AppRoute) {
   if (route.view !== 'lesson') {
     return null;
@@ -381,12 +591,51 @@ function currentLesson(route: AppRoute) {
   return courseLessons.find((lesson) => lesson.id === route.lessonId) ?? null;
 }
 
-function nextLesson() {
-  return courseLessons.find((lesson) => !isLessonComplete(lesson.id)) ?? courseLessons[courseLessons.length - 1];
-}
-
 function previousLessonFor(lesson: CourseLesson) {
   return courseLessons[lesson.session - 2] ?? null;
+}
+
+function currentGalleryStudent(route: AppRoute, studentList: GalleryStudent[]) {
+  if (route.view !== 'gallery' || route.mode !== 'student') {
+    return null;
+  }
+
+  if (route.studentId) {
+    return studentList.find((student) => student.id === route.studentId) ?? studentList[0] ?? null;
+  }
+
+  return studentList[0] ?? null;
+}
+
+function currentGalleryLesson(route: AppRoute) {
+  if (route.view !== 'gallery' || route.mode !== 'lesson') {
+    return null;
+  }
+
+  if (route.lessonId) {
+    return courseLessons.find((lesson) => lesson.id === route.lessonId) ?? courseLessons[0];
+  }
+
+  return courseLessons[0];
+}
+
+function navIcon(type: 'home' | 'gallery') {
+  if (type === 'home') {
+    return `
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d="M3.5 8.4 10 3l6.5 5.4v7.1a1 1 0 0 1-1 1H12v-4.2H8v4.2H4.5a1 1 0 0 1-1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <rect x="3" y="4" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="11.8" y="4" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="3" y="10.8" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="11.8" y="10.8" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </svg>
+  `;
 }
 
 function nextLessonFor(lesson: CourseLesson) {
@@ -394,8 +643,6 @@ function nextLessonFor(lesson: CourseLesson) {
 }
 
 function header(route: AppRoute) {
-  const summary = progressSummary();
-
   if (route.view === 'lesson') {
     return `
       <header class="lesson-shell-topbar">
@@ -404,15 +651,29 @@ function header(route: AppRoute) {
           <small>${courseLabel}</small>
         </a>
         <nav class="lesson-shell-nav" aria-label="주요 탐색">
-          <button class="lesson-shell-link active" type="button" data-route="#/">Curriculum</button>
-          <button class="lesson-shell-link" type="button" data-route="#/lesson/${route.lessonId}">Workspace</button>
-          <button class="lesson-shell-link" type="button" data-route="#/classroom">Community</button>
-          <button class="lesson-shell-link" type="button" data-route="#/classroom">Resources</button>
+          <button class="lesson-shell-link active" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
+          <button class="lesson-shell-link" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
         </nav>
         <div class="lesson-shell-actions">
-          <button class="lesson-shell-icon" type="button" aria-label="알림">◌</button>
-          <button class="lesson-shell-icon" type="button" aria-label="설정">✦</button>
-          <div class="lesson-shell-avatar">VC</div>
+          ${authActionsMarkup()}
+        </div>
+      </header>
+    `;
+  }
+
+  if (route.view === 'gallery') {
+    return `
+      <header class="lesson-shell-topbar">
+        <a class="lesson-topbar-brand" href="#/" data-route="#/">
+          <strong>${appName}</strong>
+          <small>${courseLabel}</small>
+        </a>
+        <nav class="lesson-shell-nav" aria-label="주요 탐색">
+          <button class="lesson-shell-link" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
+          <button class="lesson-shell-link active" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+        </nav>
+        <div class="lesson-shell-actions">
+          ${authActionsMarkup()}
         </div>
       </header>
     `;
@@ -421,21 +682,15 @@ function header(route: AppRoute) {
   if (route.view === 'landing' || route.view === 'classroom') {
     return `
       <header class="topbar">
-        <strong class="topbar-title">Course Dashboard</strong>
-        <label class="topbar-search" aria-label="커리큘럼 검색">
-          <span class="search-icon">⌕</span>
-          <input type="text" placeholder="Search curriculum..." />
-        </label>
+        <div class="topbar-start">
+          <strong class="topbar-title">Course Dashboard</strong>
+        </div>
+        <nav class="topnav topnav-centered" aria-label="주요 탐색">
+          <button class="nav-link active" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
+          <button class="nav-link" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+        </nav>
         <div class="topbar-end">
-          <nav class="topnav" aria-label="주요 탐색">
-            <button class="nav-link active" type="button" data-route="#/">Overview</button>
-            <button class="nav-link" type="button" data-route="#/classroom">Resources</button>
-            <button class="nav-link" type="button" data-route="#/classroom">Community</button>
-          </nav>
-          <div class="topbar-icons" aria-label="빠른 메뉴">
-            <button class="topbar-icon" type="button" aria-label="알림">◌</button>
-            <button class="topbar-icon" type="button" aria-label="프로필">◎</button>
-          </div>
+          ${authActionsMarkup(true)}
         </div>
       </header>
     `;
@@ -452,21 +707,17 @@ function header(route: AppRoute) {
           </span>
         </a>
         <strong class="topbar-title">Course Dashboard</strong>
+        <nav class="topnav" aria-label="주요 탐색">
+          <button class="nav-link active" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
+          <button class="nav-link" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+        </nav>
       </div>
       <label class="topbar-search" aria-label="커리큘럼 검색">
         <span class="search-icon">⌕</span>
         <input type="text" placeholder="Search curriculum..." />
       </label>
       <div class="topbar-end">
-        <nav class="topnav" aria-label="주요 탐색">
-          <button class="nav-link" type="button" data-route="#/">Dashboard</button>
-          <button class="nav-link active" type="button" data-route="#/lesson/${nextLesson().id}">Lesson Detail</button>
-          <button class="nav-link" type="button" data-route="#/classroom">Overview</button>
-        </nav>
-        <div class="topbar-progress">
-          <span>${summary.percent}% Complete</span>
-          <strong>${summary.completedCount}/${totalLessons}</strong>
-        </div>
+        ${authActionsMarkup(true)}
       </div>
     </header>
   `;
@@ -493,7 +744,7 @@ function classroomSidebar() {
     <aside class="dashboard-sidebar">
       <div class="dashboard-sidebar-head">
         <strong>${appName}</strong>
-        <p>Vibe Coding Workshop</p>
+        <p>${courseLabel}</p>
       </div>
       <nav class="dashboard-session-nav" aria-label="세션 탐색">
         ${courseLessons
@@ -504,14 +755,14 @@ function classroomSidebar() {
                 type="button"
                 data-route="#/lesson/${lesson.id}"
               >
-                <span class="dashboard-session-number">Session ${String(lesson.session).padStart(2, '0')}</span>
+                <span class="dashboard-session-number">${lesson.session}차시</span>
               </button>
             `;
           })
           .join('')}
       </nav>
       <div class="dashboard-sidebar-tools">
-        <button class="dashboard-resource-button" type="button" data-route="#/lesson/${nextLesson().id}">Resources</button>
+        <button class="dashboard-resource-button" type="button" data-route="#/gallery">Gallery</button>
         <button class="dashboard-tool-link" type="button" data-route="#/">Docs</button>
         <button class="dashboard-tool-link" type="button" data-action="reset-progress">Reset Progress</button>
       </div>
@@ -537,7 +788,7 @@ function classroomCards() {
             const completed = isLessonComplete(lesson.id);
             return `
               <article class="curriculum-card ${completed ? 'completed' : ''}" data-route="#/lesson/${lesson.id}" tabindex="0" role="link" aria-label="${lesson.title} 상세 페이지로 이동">
-                <span class="curriculum-card-label">Session ${String(lesson.session).padStart(2, '0')}</span>
+                <span class="curriculum-card-label">${lesson.session}차시</span>
                 <h3>${lesson.title}</h3>
                 <div class="curriculum-section">
                   <p>Objectives</p>
@@ -613,7 +864,7 @@ function renderClassroom() {
         ${classroomHero()}
         ${classroomCards()}
         <footer class="dashboard-footer">
-          <span>© 2026 Vibe Coding Starter</span>
+          <span>© 2026 ${appName}</span>
           <div>
             <span>Privacy</span>
             <span>Terms</span>
@@ -627,6 +878,251 @@ function renderClassroom() {
 
 function renderLanding() {
   return renderClassroom();
+}
+
+function renderGallery() {
+  const route = parseRoute();
+  const isStudentMode = route.view === 'gallery' && route.mode === 'student';
+  const galleryStudentList = activeGalleryStudents();
+  const selectedStudent = currentGalleryStudent(route, galleryStudentList) ?? galleryStudentList[0];
+  const selectedLesson = currentGalleryLesson(route) ?? courseLessons[0];
+
+  if (!selectedStudent && isStudentMode) {
+    return `
+      <main class="gallery-page">
+        <aside class="gallery-sidebar">
+          <div class="gallery-sidebar-head">
+            <strong>수강생 Gallery</strong>
+            <p>학생별 결과물과 차시별 결과물을 두 가지 관점으로 비교해 볼 수 있습니다.</p>
+          </div>
+        </aside>
+        <section class="gallery-main">
+          <section class="gallery-hero">
+            <div class="gallery-hero-copy">
+              <span class="gallery-kicker">Student Gallery</span>
+              <h1>아직 불러온 수강생 데이터가 없습니다</h1>
+              <p>로그인 후 차시 제출을 저장하면 이 영역에 실제 수강생 목록이 표시됩니다.</p>
+            </div>
+          </section>
+        </section>
+      </main>
+    `;
+  }
+
+  const studentSubmissionCards = courseLessons
+    .map((lesson) => {
+      const submission = selectedStudent.submissions.find((item) => item.lessonId === lesson.id);
+      if (!submission) {
+        return '';
+      }
+
+      const statusLabel =
+        submission.previewStatus === 'published'
+          ? 'Published'
+          : submission.previewStatus === 'reviewing'
+            ? 'Reviewing'
+            : 'Draft';
+
+      return `
+        <article class="gallery-submission-card">
+          <div class="gallery-submission-head">
+            <div>
+              <span class="gallery-submission-label">${lesson.session}차시</span>
+              <h3>${lesson.title}</h3>
+            </div>
+            <span class="gallery-status ${submission.previewStatus}">${statusLabel}</span>
+          </div>
+          <div class="gallery-submission-layout">
+            <div class="gallery-submission-copy">
+              <section class="gallery-detail-block">
+                <span>문제 정의와 해결 방향</span>
+                <p>${submission.problemStatement}</p>
+              </section>
+              <section class="gallery-detail-block">
+                <span>프롬프트</span>
+                <p>${submission.promptText}</p>
+              </section>
+              <section class="gallery-detail-block">
+                <span>URL</span>
+                <a href="${submission.resultLink}" target="_blank" rel="noreferrer">${submission.resultLink}</a>
+              </section>
+            </div>
+            <div class="gallery-preview-card">
+              <div class="gallery-preview-visual">
+                <img
+                  src="${submission.previewImage || `/session-artworks/${lesson.id}.png`}"
+                  alt=""
+                  loading="lazy"
+                />
+              </div>
+              <div class="gallery-preview-body">
+                <strong>${submission.previewTitle}</strong>
+                <p>${submission.previewNote}</p>
+                <small>${submission.previewDomain}</small>
+              </div>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+
+  const lessonSubmissionCards = galleryStudentList
+    .map((student) => {
+      const submission = student.submissions.find((item) => item.lessonId === selectedLesson.id);
+      if (!submission) {
+        return '';
+      }
+
+      const statusLabel =
+        submission.previewStatus === 'published'
+          ? 'Published'
+          : submission.previewStatus === 'reviewing'
+            ? 'Reviewing'
+            : 'Draft';
+
+      return `
+        <article class="gallery-submission-card">
+          <div class="gallery-submission-head">
+            <div>
+              <span class="gallery-submission-label">${student.name}</span>
+              <h3>${student.focus}</h3>
+            </div>
+            <span class="gallery-status ${submission.previewStatus}">${statusLabel}</span>
+          </div>
+          <div class="gallery-submission-layout">
+            <div class="gallery-submission-copy">
+              <section class="gallery-detail-block">
+                <span>문제 정의와 해결 방향</span>
+                <p>${submission.problemStatement}</p>
+              </section>
+              <section class="gallery-detail-block">
+                <span>프롬프트</span>
+                <p>${submission.promptText}</p>
+              </section>
+              <section class="gallery-detail-block">
+                <span>URL</span>
+                <a href="${submission.resultLink}" target="_blank" rel="noreferrer">${submission.resultLink}</a>
+              </section>
+            </div>
+            <div class="gallery-preview-card">
+              <div class="gallery-preview-visual">
+                <img
+                  src="${submission.previewImage || `/session-artworks/${selectedLesson.id}.png`}"
+                  alt=""
+                  loading="lazy"
+                />
+              </div>
+              <div class="gallery-preview-body">
+                <strong>${submission.previewTitle}</strong>
+                <p>${submission.previewNote}</p>
+                <small>${submission.previewDomain}</small>
+              </div>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+
+  return `
+    <main class="gallery-page">
+      <aside class="gallery-sidebar">
+        <div class="gallery-sidebar-head">
+          <strong>수강생 Gallery</strong>
+          <p>학생별 결과물과 차시별 결과물을 두 가지 관점으로 비교해 볼 수 있습니다.</p>
+        </div>
+        <div class="gallery-sidebar-tabs" role="tablist" aria-label="갤러리 보기 전환">
+          <button class="gallery-sidebar-tab ${isStudentMode ? 'active' : ''}" type="button" data-route="#/gallery/student">학생</button>
+          <button class="gallery-sidebar-tab ${!isStudentMode ? 'active' : ''}" type="button" data-route="#/gallery/lesson">차시</button>
+        </div>
+        <nav class="gallery-student-nav" aria-label="${isStudentMode ? '수강생 목록' : '차시 목록'}">
+          ${
+            isStudentMode
+              ? galleryStudentList
+                  .map(
+                    (student) => `
+                      <button
+                        class="gallery-student-link ${student.id === selectedStudent.id ? 'active' : ''}"
+                        type="button"
+                        data-route="#/gallery/student/${student.id}"
+                      >
+                        <strong>${student.name}</strong>
+                        <span>${student.role}</span>
+                      </button>
+                    `,
+                  )
+                  .join('')
+              : courseLessons
+                  .map(
+                    (lesson) => `
+                      <button
+                        class="gallery-student-link ${lesson.id === selectedLesson.id ? 'active' : ''}"
+                        type="button"
+                        data-route="#/gallery/lesson/${lesson.id}"
+                      >
+                        <strong>${lesson.session}차시</strong>
+                        <span>${lesson.title}</span>
+                      </button>
+                    `,
+                  )
+                  .join('')
+          }
+        </nav>
+      </aside>
+
+      <section class="gallery-main">
+        <section class="gallery-hero">
+          <div class="gallery-hero-copy">
+            <span class="gallery-kicker">${isStudentMode ? 'Student Gallery' : 'Session Gallery'}</span>
+            <h1>${
+              isStudentMode
+                ? `${selectedStudent.name}의 1차시~8차시`
+                : `${selectedLesson.session}차시 · ${selectedLesson.title}`
+            }</h1>
+            <p>${isStudentMode ? selectedStudent.note : selectedLesson.summary}</p>
+          </div>
+          <div class="gallery-hero-meta">
+            ${
+              isStudentMode
+                ? `
+                  <article>
+                    <span>역할</span>
+                    <strong>${selectedStudent.role}</strong>
+                  </article>
+                  <article>
+                    <span>기수</span>
+                    <strong>${selectedStudent.cohort}</strong>
+                  </article>
+                  <article>
+                    <span>주제</span>
+                    <strong>${selectedStudent.focus}</strong>
+                  </article>
+                `
+                : `
+                  <article>
+                    <span>차시</span>
+                    <strong>${selectedLesson.session}차시</strong>
+                  </article>
+                  <article>
+                    <span>단계</span>
+                    <strong>${selectedLesson.stageLabel}</strong>
+                  </article>
+                  <article>
+                    <span>제출 수</span>
+                    <strong>${galleryStudentList.length}명</strong>
+                  </article>
+                `
+            }
+          </div>
+        </section>
+
+        <section class="gallery-content">
+          ${isStudentMode ? studentSubmissionCards : lessonSubmissionCards}
+        </section>
+      </section>
+    </main>
+  `;
 }
 
 function renderLesson(lesson: CourseLesson) {
@@ -648,10 +1144,15 @@ function renderLesson(lesson: CourseLesson) {
       : '문제 정의를 입력하면 이 카드에 함께 표시됩니다.');
   const previewDomain = preview?.siteName?.trim() || resultHostname || '링크 미입력';
   const previewFavicon = preview?.favicon?.trim() || faviconUrl;
-  const problemSaved = lastSavedSubmissionKey === `${lesson.id}:problemStatement`;
-  const promptSaved = lastSavedSubmissionKey === `${lesson.id}:promptText`;
-  const linkSaved = lastSavedSubmissionKey === `${lesson.id}:resultLink`;
+  const problemSaved = savedSubmissionKeys.has(submissionFieldKey(lesson.id, 'problemStatement'));
+  const promptSaved = savedSubmissionKeys.has(submissionFieldKey(lesson.id, 'promptText'));
+  const reflectionSaved = savedSubmissionKeys.has(submissionFieldKey(lesson.id, 'reflectionNote'));
+  const linkSaved = savedSubmissionKeys.has(submissionFieldKey(lesson.id, 'resultLink'));
   const previewState = lastPreviewStatus?.lessonId === lesson.id ? lastPreviewStatus : null;
+  const problemMessages = submissionFieldMessages('problemStatement');
+  const promptMessages = submissionFieldMessages('promptText');
+  const resultLinkMessages = submissionFieldMessages('resultLink');
+  const reflectionMessages = submissionFieldMessages('reflectionNote');
 
   return `
     <main class="lesson-workspace-page">
@@ -706,9 +1207,9 @@ function renderLesson(lesson: CourseLesson) {
           <div class="lesson-overview-breadcrumbs">
             <span>Curriculum</span>
             <span>›</span>
-            <span>Session ${String(lesson.session).padStart(2, '0')}</span>
+            <span>${lesson.session}차시</span>
           </div>
-          <h1>Session ${String(lesson.session).padStart(2, '0')}: ${lesson.title}</h1>
+          <h1>${lesson.session}차시: ${lesson.title}</h1>
           <p>${lesson.summary}</p>
         </section>
 
@@ -800,7 +1301,7 @@ function renderLesson(lesson: CourseLesson) {
                 <h2>Project Submission</h2>
               </div>
               <p class="lesson-submission-intro">
-                이번 차시의 문제 정의부터 실습에 사용한 프롬프트, 최종 결과물 링크까지 한 번에 정리해 두세요.
+                이번 차시의 문제 정의부터 실습에 사용한 프롬프트, 오늘 활동에 대한 한 마디, 최종 결과물 링크까지 한 번에 정리해 두세요.
               </p>
               <div class="lesson-submission-form" data-submission-form="${lesson.id}">
                 <label class="lesson-form-field">
@@ -814,16 +1315,20 @@ function renderLesson(lesson: CourseLesson) {
                   >${submission.problemStatement}</textarea>
                   <div class="lesson-field-actions">
                     <button
-                      class="lesson-inline-save-button"
+                      class="lesson-inline-save-button ${problemSaved ? 'is-saved' : ''}"
                       type="button"
                       data-action="save-submission-field"
                       data-lesson-id="${lesson.id}"
                       data-submission-field="problemStatement"
                     >
-                      Save
+                      ${problemSaved ? 'Saved' : 'Save'}
                     </button>
-                    <span class="lesson-inline-save-status ${problemSaved ? 'visible' : ''}">
-                      ${problemSaved ? '문제 정의가 저장되었습니다.' : '입력 후 저장 버튼을 눌러 반영하세요.'}
+                    <span
+                      class="lesson-inline-save-status ${problemSaved ? 'visible' : ''}"
+                      data-default-status="${problemMessages.idle}"
+                      data-saved-status="${problemMessages.saved}"
+                    >
+                      ${problemSaved ? problemMessages.saved : problemMessages.idle}
                     </span>
                   </div>
                 </label>
@@ -838,16 +1343,20 @@ function renderLesson(lesson: CourseLesson) {
                   >${submission.promptText}</textarea>
                   <div class="lesson-field-actions">
                     <button
-                      class="lesson-inline-save-button"
+                      class="lesson-inline-save-button ${promptSaved ? 'is-saved' : ''}"
                       type="button"
                       data-action="save-submission-field"
                       data-lesson-id="${lesson.id}"
                       data-submission-field="promptText"
                     >
-                      Save
+                      ${promptSaved ? 'Saved' : 'Save'}
                     </button>
-                    <span class="lesson-inline-save-status ${promptSaved ? 'visible' : ''}">
-                      ${promptSaved ? '프롬프트가 저장되었습니다.' : '입력 후 저장 버튼을 눌러 반영하세요.'}
+                    <span
+                      class="lesson-inline-save-status ${promptSaved ? 'visible' : ''}"
+                      data-default-status="${promptMessages.idle}"
+                      data-saved-status="${promptMessages.saved}"
+                    >
+                      ${promptSaved ? promptMessages.saved : promptMessages.idle}
                     </span>
                   </div>
                 </label>
@@ -863,16 +1372,48 @@ function renderLesson(lesson: CourseLesson) {
                   />
                   <div class="lesson-field-actions">
                     <button
-                      class="lesson-inline-save-button"
+                      class="lesson-inline-save-button ${linkSaved ? 'is-saved' : ''}"
                       type="button"
                       data-action="save-submission-field"
                       data-lesson-id="${lesson.id}"
                       data-submission-field="resultLink"
                     >
-                      Save
+                      ${linkSaved ? 'Saved' : 'Save'}
                     </button>
-                    <span class="lesson-inline-save-status ${linkSaved ? 'visible' : ''}">
-                      ${linkSaved ? '결과물 링크가 저장되었습니다. 아래 미리보기를 확인해 보세요.' : '링크 저장 후 결과물 카드가 업데이트됩니다.'}
+                    <span
+                      class="lesson-inline-save-status ${linkSaved ? 'visible' : ''}"
+                      data-default-status="${resultLinkMessages.idle}"
+                      data-saved-status="${resultLinkMessages.saved}"
+                    >
+                      ${linkSaved ? resultLinkMessages.saved : resultLinkMessages.idle}
+                    </span>
+                  </div>
+                </label>
+                <label class="lesson-form-field">
+                  <span>오늘 남기는 한 마디</span>
+                  <small>수업을 마친 뒤 오늘의 활동에서 느낀 점이나 기억에 남는 배움을 짧게 남겨보세요.</small>
+                  <textarea
+                    rows="4"
+                    data-submission-lesson="${lesson.id}"
+                    data-submission-field="reflectionNote"
+                    placeholder="오늘 활동을 돌아보며 한 마디를 남겨보세요."
+                  >${submission.reflectionNote}</textarea>
+                  <div class="lesson-field-actions">
+                    <button
+                      class="lesson-inline-save-button ${reflectionSaved ? 'is-saved' : ''}"
+                      type="button"
+                      data-action="save-submission-field"
+                      data-lesson-id="${lesson.id}"
+                      data-submission-field="reflectionNote"
+                    >
+                      ${reflectionSaved ? 'Saved' : 'Save'}
+                    </button>
+                    <span
+                      class="lesson-inline-save-status ${reflectionSaved ? 'visible' : ''}"
+                      data-default-status="${reflectionMessages.idle}"
+                      data-saved-status="${reflectionMessages.saved}"
+                    >
+                      ${reflectionSaved ? reflectionMessages.saved : reflectionMessages.idle}
                     </span>
                   </div>
                 </label>
@@ -1000,7 +1541,17 @@ function renderLesson(lesson: CourseLesson) {
 }
 
 function render() {
-  const route = parseRoute();
+  let route = parseRoute();
+
+  if (!currentUser && isProtectedRoute(route)) {
+    authModalOpen = true;
+    if (window.location.hash !== '#/') {
+      window.location.hash = '#/';
+      return;
+    }
+    route = { view: 'landing' };
+  }
+
   const lesson = currentLesson(route);
 
   if (lesson) {
@@ -1018,12 +1569,16 @@ function render() {
     case 'lesson':
       page = lesson ? renderLesson(lesson) : renderLanding();
       break;
+    case 'gallery':
+      page = renderGallery();
+      break;
   }
 
   app.innerHTML = `
-    <div class="app-frame ${route.view === 'classroom' || route.view === 'landing' || route.view === 'lesson' ? 'dashboard-app' : ''}">
+    <div class="app-frame ${route.view === 'classroom' || route.view === 'landing' || route.view === 'lesson' || route.view === 'gallery' ? 'dashboard-app' : ''}">
       ${header(route)}
       ${page}
+      ${renderAuthModal()}
     </div>
   `;
 }
@@ -1065,12 +1620,70 @@ app.addEventListener('click', async (event) => {
   }
 
   const action = actionTarget.dataset.action;
+  if (action === 'open-auth') {
+    const nextMode = actionTarget.dataset.authMode === 'signup' ? 'signup' : 'login';
+    openAuthModal(nextMode);
+    return;
+  }
+
+  if (action === 'close-auth-modal') {
+    if (target === actionTarget || target.classList.contains('auth-modal-close')) {
+      closeAuthModal();
+      render();
+    }
+    return;
+  }
+
+  if (action === 'switch-auth-mode') {
+    authMode = actionTarget.dataset.authMode === 'signup' ? 'signup' : 'login';
+    authErrorMessage = '';
+    render();
+    return;
+  }
+
+  if (action === 'sign-in') {
+    try {
+      render();
+      await signInWithGoogle();
+    } catch {
+      render();
+    }
+    return;
+  }
+
+  if (action === 'auth-google') {
+    try {
+      authSubmitting = true;
+      authErrorMessage = '';
+      render();
+      await signInWithGoogle();
+      authModalOpen = false;
+    } catch (error) {
+      authErrorMessage = authErrorToMessage(error);
+    } finally {
+      authSubmitting = false;
+      render();
+    }
+    return;
+  }
+
+  if (action === 'sign-out') {
+    try {
+      await signOutFromFirebase();
+    } catch {}
+    render();
+    return;
+  }
+
   if (action === 'save-submission-field') {
     const lessonId = actionTarget.dataset.lessonId;
     const field = actionTarget.dataset.submissionField;
     if (
       !lessonId ||
-      (field !== 'problemStatement' && field !== 'promptText' && field !== 'resultLink')
+      (field !== 'problemStatement' &&
+        field !== 'promptText' &&
+        field !== 'reflectionNote' &&
+        field !== 'resultLink')
     ) {
       return;
     }
@@ -1091,7 +1704,7 @@ app.addEventListener('click', async (event) => {
       [field]: fieldElement.value,
     });
 
-    lastSavedSubmissionKey = `${lessonId}:${field}`;
+    savedSubmissionKeys.add(submissionFieldKey(lessonId, field));
     if (field === 'resultLink') {
       const normalizedLink = normalizeUrl(fieldElement.value);
       if (!normalizedLink) {
@@ -1101,6 +1714,7 @@ app.addEventListener('click', async (event) => {
           state: 'idle',
           message: '링크를 입력하면 미리보기를 시도할 수 있습니다.',
         };
+        void syncStateToCloud();
         render();
         return;
       }
@@ -1129,11 +1743,13 @@ app.addEventListener('click', async (event) => {
         };
       }
 
+      void syncStateToCloud();
       render();
       return;
     }
 
     lastPreviewStatus = null;
+    void syncStateToCloud();
     render();
     return;
   }
@@ -1144,12 +1760,14 @@ app.addEventListener('click', async (event) => {
       return;
     }
     toggleLessonComplete(lessonId);
+    void syncStateToCloud();
     render();
     return;
   }
 
   if (action === 'reset-progress') {
     resetProgress();
+    void syncStateToCloud();
     render();
   }
 });
@@ -1174,10 +1792,79 @@ app.addEventListener('keydown', (event) => {
   }
 });
 
+app.addEventListener('input', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  resetFieldSaveVisual(target);
+});
+
+app.addEventListener('submit', async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLFormElement)) {
+    return;
+  }
+
+  const mode = target.dataset.authForm;
+  if (mode !== 'login' && mode !== 'signup') {
+    return;
+  }
+
+  event.preventDefault();
+
+  const formData = new FormData(target);
+  const email = String(formData.get('email') ?? '').trim();
+  const password = String(formData.get('password') ?? '').trim();
+  const displayName = String(formData.get('displayName') ?? '').trim();
+
+  authSubmitting = true;
+  authErrorMessage = '';
+  render();
+
+  try {
+    if (mode === 'signup') {
+      await signUpWithEmail(displayName, email, password);
+    } else {
+      await signInWithEmail(email, password);
+    }
+
+    authModalOpen = false;
+  } catch (error) {
+    authErrorMessage = authErrorToMessage(error);
+  } finally {
+    authSubmitting = false;
+    render();
+  }
+});
+
 window.addEventListener('hashchange', render);
 
 if (!window.location.hash) {
   window.location.hash = '#/';
 }
+
+subscribeToAuth(async (user) => {
+  authReady = true;
+  currentUser = user;
+
+  if (!user) {
+    hydratedUserId = null;
+    firebaseGalleryStudents = [];
+    render();
+    return;
+  }
+
+  authModalOpen = false;
+  authErrorMessage = '';
+
+  if (hydratedUserId === user.uid) {
+    render();
+    return;
+  }
+
+  await hydrateUserState(user);
+});
 
 render();

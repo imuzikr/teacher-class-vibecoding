@@ -1,7 +1,9 @@
 export type AppRoute =
   | { view: 'landing' }
   | { view: 'classroom' }
-  | { view: 'lesson'; lessonId: string };
+  | { view: 'lesson'; lessonId: string }
+  | { view: 'gallery'; mode: 'student'; studentId?: string }
+  | { view: 'gallery'; mode: 'lesson'; lessonId?: string };
 
 export interface LessonVocabulary {
   term: string;
@@ -53,6 +55,7 @@ export interface LearnerPromise {
 export interface LessonSubmissionDraft {
   problemStatement: string;
   promptText: string;
+  reflectionNote: string;
   resultLink: string;
 }
 
@@ -70,4 +73,41 @@ export interface PersistedState {
   lastVisitedLessonId: string | null;
   submissionsByLesson: Record<string, LessonSubmissionDraft>;
   previewsByLesson: Record<string, LinkPreviewData>;
+}
+
+export interface AuthenticatedUser {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string;
+}
+
+export interface GallerySubmission {
+  lessonId: string;
+  problemStatement: string;
+  promptText: string;
+  resultLink: string;
+  previewStatus: 'published' | 'reviewing' | 'draft';
+  previewTitle: string;
+  previewNote: string;
+  previewImage?: string;
+  previewDomain?: string;
+}
+
+export interface GalleryStudent {
+  id: string;
+  name: string;
+  role: string;
+  cohort: string;
+  focus: string;
+  note: string;
+  submissions: GallerySubmission[];
+}
+
+export interface FirebaseGalleryRecord {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string;
+  state: PersistedState | null;
 }

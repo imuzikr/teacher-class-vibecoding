@@ -1,7 +1,7 @@
-import type { CourseLesson, HighlightCard, LearnerPromise } from './types.ts';
+import type { CourseLesson, GalleryStudent, HighlightCard, LearnerPromise } from './types.ts';
 
-export const appName = 'Vibe Coding Starter';
-export const courseLabel = '비개발자도 따라오는 8차시 바이브 코딩 코스';
+export const appName = 'Vibe Coding for Teacher';
+export const courseLabel = '교사 개발자가 되기 위한 8차시 Vibe Coding 코스';
 
 export const landingHighlights: HighlightCard[] = [
   {
@@ -529,6 +529,83 @@ export const courseLessons: CourseLesson[] = [
     coachNotes: [
       '처음부터 모든 보안을 완벽히 아는 사람은 없습니다. 중요한 것은 비밀 값을 공개 코드에 두지 않는 습관입니다.',
       '빠르게 보여줘야 하는 파일인지, 비밀 값을 숨겨야 하는 요청인지에 따라 서버리스와 CDN의 역할이 달라질 수 있습니다.',
+    ],
+  },
+];
+
+function gallerySubmission(
+  lessonId: string,
+  previewStatus: 'published' | 'reviewing' | 'draft',
+  problemStatement: string,
+  promptText: string,
+  resultLink: string,
+  previewTitle: string,
+  previewNote: string,
+) {
+  return {
+    lessonId,
+    previewStatus,
+    problemStatement,
+    promptText,
+    resultLink,
+    previewTitle,
+    previewNote,
+  };
+}
+
+export const galleryStudents: GalleryStudent[] = [
+  {
+    id: 'soyeon-kim',
+    name: '김소연',
+    role: '초등 교사',
+    cohort: '2026 상반기',
+    focus: '읽기 습관 형성 앱',
+    note: '저학년 독서 동기를 높이는 수업용 웹 앱을 만들고 있습니다.',
+    submissions: [
+      gallerySubmission('session-1', 'published', '학생들이 독서를 숙제처럼 느끼지 않게 만들고 싶다.', '초등학생이 책 읽기를 게임처럼 느끼게 하는 서비스 아이디어를 정리해줘.', 'https://reader-sprout.vercel.app', 'Reader Sprout', '아이디어 정의와 첫 화면 방향이 깔끔하게 연결되었습니다.'),
+      gallerySubmission('session-2', 'published', '독서 미션 알림을 학생별로 다르게 보내고 싶다.', '학생 이름과 주간 미션을 넣어 메일머지용 안내 문구를 작성해줘.', 'https://reader-sprout.vercel.app/mail', 'Reader Mail Flow', '메일머지 구조와 학부모 알림 흐름을 정리했습니다.'),
+      gallerySubmission('session-3', 'reviewing', 'Antigravity에서 어디부터 요청해야 할지 막막했다.', '초보 교사가 독서 기록 앱을 만들 때 Antigravity에 처음 요청할 문장을 정리해줘.', 'https://reader-sprout.vercel.app/plan', 'Prompt Starter', '도구 적응 단계라 계획 화면을 중심으로 점검 중입니다.'),
+      gallerySubmission('session-4', 'published', '랜딩 페이지의 문구와 화면 구성이 계속 흔들렸다.', '초등 독서 앱 랜딩 페이지를 따뜻한 톤으로 구성하는 작업 요청 프롬프트를 만들어줘.', 'https://reader-sprout.vercel.app/landing', 'Landing Draft', '작업 요청과 수정 루틴이 잘 남아 있습니다.'),
+      gallerySubmission('session-5', 'published', '학생별 기록을 저장해서 다시 보여주고 싶다.', '독서 앱에서 학생 이름, 읽은 책, 배지 상태를 저장하는 Firestore 구조를 제안해줘.', 'https://reader-sprout.vercel.app/dashboard', 'Reading Database', '기록 보드와 저장 구조가 서비스처럼 보이기 시작했습니다.'),
+      gallerySubmission('session-6', 'reviewing', '학생과 교사를 구분해서 다른 화면을 보여주고 싶다.', '교사/학생 역할에 따라 다른 홈 화면을 보여주는 로그인 흐름을 설명해줘.', 'https://reader-sprout.vercel.app/login', 'Role-based Login', '권한 분기와 안내 문구를 조금 더 다듬는 중입니다.'),
+      gallerySubmission('session-7', 'draft', '도서 정보 API를 붙여 추천 책을 보여주고 싶다.', '독서 앱에서 외부 책 정보를 요청하고 추천 카드로 보여주는 API 흐름을 정리해줘.', 'https://reader-sprout.vercel.app/api', 'Book API Flow', '외부 API 연결 전 단계의 요청 구조를 정리했습니다.'),
+      gallerySubmission('session-8', 'published', 'API 키를 노출하지 않고 추천 결과를 빠르게 보여주고 싶다.', '도서 검색 요청은 서버리스로 보내고, 정적 화면은 빠르게 전달하는 구조를 설명해줘.', 'https://reader-sprout.vercel.app/infra', 'Safe Reading Infra', '서버리스와 CDN 역할 구분이 명확하게 정리되었습니다.'),
+    ],
+  },
+  {
+    id: 'minji-park',
+    name: '박민지',
+    role: '중등 영어 교사',
+    cohort: '2026 상반기',
+    focus: '영어 말하기 피드백 도구',
+    note: '영어 말하기 과제를 학생별로 모으고 피드백하는 흐름을 만들고 있습니다.',
+    submissions: [
+      gallerySubmission('session-1', 'published', '학생들이 말하기 연습을 꾸준히 남기게 돕고 싶다.', '영어 말하기 과제를 기록하고 칭찬 피드백을 주는 서비스 아이디어를 한 줄로 정리해줘.', 'https://speak-bloom.vercel.app', 'Speak Bloom', '서비스 문제 정의가 분명하고 사용자가 잘 보입니다.'),
+      gallerySubmission('session-2', 'published', '학생별 과제 안내를 개별 문구로 보내고 싶다.', '학생 이름, 과제 주제, 제출 마감일이 들어가는 메일머지 안내문을 작성해줘.', 'https://speak-bloom.vercel.app/mail', 'Assignment Mailer', '개인화 안내 흐름이 자연스럽게 정리됐습니다.'),
+      gallerySubmission('session-3', 'reviewing', '새 도구를 어떤 순서로 써야 하는지 감이 필요했다.', '영어 말하기 피드백 앱을 만드는 교사 관점에서 Antigravity 사용 순서를 정리해줘.', 'https://speak-bloom.vercel.app/workflow', 'Tool Workflow', '도구 소개를 실제 작업 순서와 연결했습니다.'),
+      gallerySubmission('session-4', 'published', '작업 요청을 구체적으로 쓰는 훈련이 필요했다.', '학생 말하기 과제 앱 첫 화면을 만드는 데 필요한 작업 지시 프롬프트를 작성해줘.', 'https://speak-bloom.vercel.app/prompt', 'Prompt Practice', '검토 포인트까지 함께 남겨둔 점이 좋습니다.'),
+      gallerySubmission('session-5', 'published', '학생별 녹음 제출 여부와 교사 피드백을 저장하고 싶다.', '영어 말하기 제출 앱에서 학생, 과제, 피드백을 저장하는 Firestore 구조를 제안해줘.', 'https://speak-bloom.vercel.app/submissions', 'Submission Database', '데이터 구조가 비교적 안정적으로 설계되었습니다.'),
+      gallerySubmission('session-6', 'published', '학생과 교사가 보는 페이지를 분리하고 싶다.', '학생과 교사가 각각 다른 홈 화면을 보는 Firebase 로그인 구조를 설명해줘.', 'https://speak-bloom.vercel.app/auth', 'Teacher / Student Login', '인증 흐름이 실제 서비스 느낌으로 정리되었습니다.'),
+      gallerySubmission('session-7', 'reviewing', '음성 분석 API를 붙이는 흐름을 먼저 이해하고 싶다.', '녹음 파일 분석 API 요청과 응답 흐름을 초보자도 이해하게 설명해줘.', 'https://speak-bloom.vercel.app/api', 'Speech API Plan', 'API 연동 전 준비 단계가 잘 드러납니다.'),
+      gallerySubmission('session-8', 'draft', '분석 요청은 안전하게 보내고 결과 화면은 빠르게 유지하고 싶다.', '학생 음성 분석 서비스에서 서버리스와 CDN을 어떻게 나누면 좋은지 정리해줘.', 'https://speak-bloom.vercel.app/infra', 'Delivery & Security', '마지막 인프라 정리 단계의 초안입니다.'),
+    ],
+  },
+  {
+    id: 'jiyoon-lee',
+    name: '이지윤',
+    role: '고등 정보 교사',
+    cohort: '2026 상반기',
+    focus: '수업 프로젝트 전시 갤러리',
+    note: '학생 프로젝트를 학급별로 모아 보여주는 전시형 갤러리를 만들고 있습니다.',
+    submissions: [
+      gallerySubmission('session-1', 'published', '학생 결과물을 한눈에 보여주는 전시 공간이 필요하다.', '교사가 학생 작품을 모아 보여주는 프로젝트 갤러리 서비스 아이디어를 정리해줘.', 'https://class-showcase.vercel.app', 'Class Showcase', '문제 정의와 사용 장면이 선명합니다.'),
+      gallerySubmission('session-2', 'reviewing', '학부모 초대 메일을 학생별로 다르게 보내고 싶다.', '학생 이름과 작품 제목이 들어가는 전시 초대 메일머지 문구를 작성해줘.', 'https://class-showcase.vercel.app/invite', 'Invite Flow', '이벤트 공지 흐름을 메일머지로 확장했습니다.'),
+      gallerySubmission('session-3', 'published', 'Antigravity를 프로젝트 전시 화면 설계에 써보고 싶다.', '학생 작품 갤러리 제작에 Antigravity를 어떻게 쓰면 좋은지 초보자용으로 설명해줘.', 'https://class-showcase.vercel.app/explore', 'Gallery Setup', '도구 이해와 활용 장면이 잘 이어집니다.'),
+      gallerySubmission('session-4', 'published', '초안 생성과 수정 요청을 반복하는 루틴을 만들고 싶다.', '학생 작품 갤러리 홈 화면을 만드는 구체적 작업 요청 프롬프트를 작성해줘.', 'https://class-showcase.vercel.app/iterate', 'Iteration Routine', '수정 과정을 잘 기록해 둔 사례입니다.'),
+      gallerySubmission('session-5', 'published', '작품 설명, 팀명, 링크를 저장하는 구조가 필요하다.', '전시 갤러리 앱에 맞는 Firebase 데이터 구조를 제안해줘.', 'https://class-showcase.vercel.app/projects', 'Project Database', '데이터베이스 연결 이후 서비스 느낌이 크게 살아났습니다.'),
+      gallerySubmission('session-6', 'reviewing', '학생 업로드와 교사 관리 화면을 분리하고 싶다.', '학생과 교사가 다른 기능을 쓰는 로그인 구조를 쉬운 말로 설명해줘.', 'https://class-showcase.vercel.app/login', 'Access Flow', '역할 분리 아이디어를 검토 중입니다.'),
+      gallerySubmission('session-7', 'published', '외부 동영상 링크나 임베드 정보를 불러오고 싶다.', '외부 콘텐츠 정보를 가져와 카드형으로 보여주는 API 흐름을 설명해줘.', 'https://class-showcase.vercel.app/embed', 'Media API', 'API를 서비스 화면과 잘 연결했습니다.'),
+      gallerySubmission('session-8', 'published', '전시 이미지는 빠르게 보여주고 민감 정보는 숨기고 싶다.', '전시 갤러리 서비스에서 CDN과 서버리스 함수를 어떻게 나눌지 정리해줘.', 'https://class-showcase.vercel.app/ops', 'Gallery Infra', '배포와 운영 구조를 비교적 안정적으로 설명했습니다.'),
     ],
   },
 ];

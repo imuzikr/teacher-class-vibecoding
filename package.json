@@ -7,10 +7,19 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "generate:artwork": "node scripts/generate-session-artwork.mjs"
+    "generate:artwork": "node scripts/generate-session-artwork.mjs",
+    "firebase:login": "firebase login",
+    "firebase:use": "firebase use --add",
+    "vercel:login": "vercel login",
+    "vercel:link": "vercel link"
   },
   "devDependencies": {
+    "firebase-tools": "^15.15.0",
     "typescript": "~5.9.3",
+    "vercel": "^51.7.0",
     "vite": "^8.0.1"
+  },
+  "dependencies": {
+    "firebase": "^12.12.0"
   }
 }

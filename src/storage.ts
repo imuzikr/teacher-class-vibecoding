@@ -5,6 +5,7 @@ const STORAGE_KEY = 'vibe-coding-starter-progress-v1';
 const emptySubmissionDraft: LessonSubmissionDraft = {
   problemStatement: '',
   promptText: '',
+  reflectionNote: '',
   resultLink: '',
 };
 
@@ -17,6 +18,17 @@ const initialState: PersistedState = {
 
 let state = loadState();
 
+function normalizeState(parsed: Partial<PersistedState> | null | undefined): PersistedState {
+  return {
+    completedLessonIds: Array.isArray(parsed?.completedLessonIds) ? parsed.completedLessonIds : [],
+    lastVisitedLessonId: parsed?.lastVisitedLessonId ?? null,
+    submissionsByLesson:
+      parsed?.submissionsByLesson && typeof parsed.submissionsByLesson === 'object' ? parsed.submissionsByLesson : {},
+    previewsByLesson:
+      parsed?.previewsByLesson && typeof parsed.previewsByLesson === 'object' ? parsed.previewsByLesson : {},
+  };
+}
+
 function loadState(): PersistedState {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) {
@@ -26,14 +38,7 @@ function loadState(): PersistedState {
 
   try {
     const parsed = JSON.parse(raw) as PersistedState;
-    return {
-      completedLessonIds: Array.isArray(parsed.completedLessonIds) ? parsed.completedLessonIds : [],
-      lastVisitedLessonId: parsed.lastVisitedLessonId ?? null,
-      submissionsByLesson:
-        parsed.submissionsByLesson && typeof parsed.submissionsByLesson === 'object' ? parsed.submissionsByLesson : {},
-      previewsByLesson:
-        parsed.previewsByLesson && typeof parsed.previewsByLesson === 'object' ? parsed.previewsByLesson : {},
-    };
+    return normalizeState(parsed);
   } catch {
     persist(initialState);
     return { ...initialState };
@@ -51,6 +56,10 @@ function sync(nextState: PersistedState) {
 
 export function getState() {
   return state;
+}
+
+export function replaceState(nextState: Partial<PersistedState>) {
+  sync(normalizeState(nextState));
 }
 
 export function isLessonComplete(lessonId: string) {
