@@ -10,7 +10,7 @@ import {
   type User,
   updateProfile,
 } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, getFirestore, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { AuthenticatedUser, FirebaseGalleryRecord, PersistedState } from './types.ts';
 
 const firebaseConfig: FirebaseOptions = {
@@ -140,6 +140,30 @@ export async function saveUserState(uid: string, state: PersistedState, user?: A
   }
 }
 
+export async function saveLessonThumbnail(uid: string, lessonId: string, imageDataUrl: string, sourceUrl: string) {
+  if (!db) {
+    return;
+  }
+
+  await setDoc(
+    doc(db, 'users', uid, 'screenshots', lessonId),
+    {
+      imageDataUrl,
+      sourceUrl,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+export async function clearLessonThumbnail(uid: string, lessonId: string) {
+  if (!db) {
+    return;
+  }
+
+  await deleteDoc(doc(db, 'users', uid, 'screenshots', lessonId));
+}
+
 export async function fetchGalleryRecords(): Promise<FirebaseGalleryRecord[]> {
   if (!db) {
     return [];
@@ -151,6 +175,14 @@ export async function fetchGalleryRecords(): Promise<FirebaseGalleryRecord[]> {
       const profile = userDoc.data();
       const stateSnapshot = await getDoc(doc(db, 'users', userDoc.id, 'app', 'current'));
       const stateData = stateSnapshot.exists() ? ((stateSnapshot.data().state ?? null) as PersistedState | null) : null;
+      const screenshotSnapshots = await getDocs(collection(db, 'users', userDoc.id, 'screenshots'));
+      const thumbnailsByLesson = screenshotSnapshots.docs.reduce<Record<string, string>>((accumulator, screenshotDoc) => {
+        const imageDataUrl = String(screenshotDoc.data().imageDataUrl ?? '').trim();
+        if (imageDataUrl) {
+          accumulator[screenshotDoc.id] = imageDataUrl;
+        }
+        return accumulator;
+      }, {});
 
       return {
         uid: userDoc.id,
@@ -158,6 +190,7 @@ export async function fetchGalleryRecords(): Promise<FirebaseGalleryRecord[]> {
         email: String(profile.email ?? ''),
         photoURL: String(profile.photoURL ?? ''),
         state: stateData,
+        thumbnailsByLesson,
       };
     }),
   );

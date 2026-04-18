@@ -110,4 +110,5 @@ export interface FirebaseGalleryRecord {
   email: string;
   photoURL: string;
   state: PersistedState | null;
+  thumbnailsByLesson: Record<string, string>;
 }

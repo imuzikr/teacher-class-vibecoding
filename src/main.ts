@@ -1,9 +1,11 @@
 import './style.css';
 import { appName, courseLabel, courseLessons, galleryStudents } from './data.ts';
 import {
+  clearLessonThumbnail,
   fetchGalleryRecords,
   hasFirebaseConfig,
   loadUserState,
+  saveLessonThumbnail,
   saveUserState,
   signInWithEmail,
   signInWithGoogle,
@@ -55,6 +57,10 @@ let authModalOpen = false;
 let authMode: 'login' | 'signup' = 'login';
 let authSubmitting = false;
 let authErrorMessage = '';
+const serverlessApiBase =
+  window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+    ? 'https://teacher-class-vibecoding.vercel.app'
+    : '';
 
 function submissionFieldKey(lessonId: string, field: string) {
   return `${lessonId}:${field}`;
@@ -281,12 +287,26 @@ async function fetchLinkPreview(link: string) {
     throw new Error('링크가 비어 있습니다.');
   }
 
-  const response = await fetch(`/api/link-preview?url=${encodeURIComponent(normalized)}`);
+  const response = await fetch(`${serverlessApiBase}/api/link-preview?url=${encodeURIComponent(normalized)}`);
   if (!response.ok) {
     throw new Error('미리보기 정보를 가져오지 못했습니다.');
   }
 
   return (await response.json()) as LinkPreviewData;
+}
+
+async function fetchLinkThumbnail(link: string) {
+  const normalized = normalizeUrl(link);
+  if (!normalized) {
+    throw new Error('링크가 비어 있습니다.');
+  }
+
+  const response = await fetch(`${serverlessApiBase}/api/link-thumbnail?url=${encodeURIComponent(normalized)}`);
+  if (!response.ok) {
+    throw new Error('썸네일 이미지를 가져오지 못했습니다.');
+  }
+
+  return (await response.json()) as { imageDataUrl: string; capturedUrl: string };
 }
 
 function renderInlineReadings(lesson: CourseLesson) {
@@ -365,7 +385,7 @@ function galleryRoleFromEmail(email: string) {
 function toGallerySubmission(record: FirebaseGalleryRecord, lesson: CourseLesson): GallerySubmission {
   const draft = record.state?.submissionsByLesson?.[lesson.id];
   const preview = record.state?.previewsByLesson?.[lesson.id];
-  const previewImage = preview?.image?.trim() || '';
+  const previewImage = record.thumbnailsByLesson[lesson.id] || preview?.image?.trim() || '';
   const previewDomain =
     preview?.siteName?.trim() || extractHostname(draft?.resultLink?.trim() || '') || '링크 미입력';
   const hasAnyDraft = Boolean(
@@ -1709,6 +1729,9 @@ app.addEventListener('click', async (event) => {
       const normalizedLink = normalizeUrl(fieldElement.value);
       if (!normalizedLink) {
         clearLessonPreview(lessonId);
+        if (currentUser) {
+          void clearLessonThumbnail(currentUser.uid, lessonId);
+        }
         lastPreviewStatus = {
           lessonId,
           state: 'idle',
@@ -1729,10 +1752,18 @@ app.addEventListener('click', async (event) => {
       try {
         const preview = await fetchLinkPreview(normalizedLink);
         updateLessonPreview(lessonId, preview);
+        if (currentUser) {
+          try {
+            const thumbnail = await fetchLinkThumbnail(normalizedLink);
+            if (thumbnail.imageDataUrl) {
+              await saveLessonThumbnail(currentUser.uid, lessonId, thumbnail.imageDataUrl, thumbnail.capturedUrl);
+            }
+          } catch {}
+        }
         lastPreviewStatus = {
           lessonId,
           state: 'success',
-          message: '링크 미리보기 정보를 불러왔습니다.',
+          message: '링크 미리보기와 썸네일 생성을 시도했습니다.',
         };
       } catch {
         clearLessonPreview(lessonId);
