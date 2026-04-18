@@ -142,7 +142,16 @@ function renderInlineReadings(lesson: CourseLesson) {
   `;
 }
 
+function truncateSessionLabel(title: string, maxLength = 22) {
+  if (title.length <= maxLength) {
+    return title;
+  }
+
+  return `${title.slice(0, maxLength).trimEnd()}...`;
+}
+
 function renderSessionArtwork(lesson: CourseLesson) {
+  const generatedImagePath = `/session-artworks/${lesson.id}.png`;
   const artworkMap: Record<string, string> = {
     'session-1': `
       <svg viewBox="0 0 720 260" role="img" aria-label="${lesson.title}를 상징하는 이미지" xmlns="http://www.w3.org/2000/svg">
@@ -338,7 +347,17 @@ function renderSessionArtwork(lesson: CourseLesson) {
 
   return `
     <div class="lesson-canvas-artwork" aria-hidden="true">
-      ${artworkMap[lesson.id] ?? artworkMap['session-1']}
+      <img
+        class="lesson-canvas-generated-artwork"
+        src="${generatedImagePath}"
+        alt=""
+        loading="lazy"
+        onload="this.nextElementSibling?.remove()"
+        onerror="this.remove()"
+      />
+      <div class="lesson-canvas-fallback-artwork">
+        ${artworkMap[lesson.id] ?? artworkMap['session-1']}
+      </div>
     </div>
   `;
 }
@@ -637,6 +656,30 @@ function renderLesson(lesson: CourseLesson) {
   return `
     <main class="lesson-workspace-page">
       <aside class="lesson-workspace-rail">
+        <section class="lesson-session-picker-panel">
+          <p class="lesson-session-picker-label">학습 주차 선택</p>
+          <details class="lesson-session-picker">
+            <summary class="lesson-session-picker-trigger">
+              <span>${`${lesson.session}차시 · ${truncateSessionLabel(lesson.title, 14)}`}</span>
+            </summary>
+            <div class="lesson-session-picker-menu" role="listbox" aria-label="학습 주차 목록">
+              ${courseLessons
+                .map(
+                  (item) => `
+                    <button
+                      class="lesson-session-option ${item.id === lesson.id ? 'active' : ''}"
+                      type="button"
+                      data-route="#/lesson/${item.id}"
+                      title="${item.session}차시 · ${item.title}"
+                    >
+                      ${`${item.session}차시 · ${truncateSessionLabel(item.title, 24)}`}
+                    </button>
+                  `,
+                )
+                .join('')}
+            </div>
+          </details>
+        </section>
         <section class="lesson-path-panel">
           <p class="lesson-panel-label">Workshop Path</p>
           <strong>${summary.percent}% Complete</strong>
@@ -990,6 +1033,13 @@ app.addEventListener('click', async (event) => {
   if (!(target instanceof HTMLElement)) {
     return;
   }
+
+  const currentPicker = target.closest<HTMLElement>('.lesson-session-picker');
+  app.querySelectorAll<HTMLDetailsElement>('.lesson-session-picker[open]').forEach((picker) => {
+    if (picker !== currentPicker) {
+      picker.open = false;
+    }
+  });
 
   const routeTarget = target.closest<HTMLElement>('[data-route]');
   if (routeTarget) {
