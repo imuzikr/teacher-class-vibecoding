@@ -57,10 +57,27 @@ let authModalOpen = false;
 let authMode: 'login' | 'signup' = 'login';
 let authSubmitting = false;
 let authErrorMessage = '';
+let pendingTopbarScrollReset = false;
+let galleryDetailModal:
+  | {
+      label: string;
+      title: string;
+      content: string;
+    }
+  | null = null;
 const serverlessApiBase =
   window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
     ? 'https://teacher-class-vibecoding.vercel.app'
     : '';
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
 function submissionFieldKey(lessonId: string, field: string) {
   return `${lessonId}:${field}`;
@@ -186,16 +203,25 @@ function parseRoute(): AppRoute {
 
 function navigateTo(route: string) {
   const nextHash = route.replace(/^#/, '');
+  galleryDetailModal = null;
   if (!currentUser && (nextHash.startsWith('/lesson/') || nextHash.startsWith('/gallery'))) {
     openAuthModal('login');
     return;
   }
 
+  const shouldResetScroll = nextHash === '/' || nextHash.startsWith('/gallery');
+
   if (window.location.hash === route) {
+    if (shouldResetScroll) {
+      pendingTopbarScrollReset = true;
+    }
     render();
     return;
   }
 
+  if (shouldResetScroll) {
+    pendingTopbarScrollReset = true;
+  }
   window.location.hash = route;
 }
 
@@ -564,6 +590,23 @@ function renderAuthModal() {
         <button class="auth-google-button" type="button" data-action="auth-google" ${authSubmitting ? 'disabled' : ''}>
           Google로 계속하기
         </button>
+      </section>
+    </div>
+  `;
+}
+
+function renderGalleryDetailModal() {
+  if (!galleryDetailModal) {
+    return '';
+  }
+
+  return `
+    <div class="gallery-detail-modal-backdrop" data-action="close-gallery-detail">
+      <section class="gallery-detail-modal" role="dialog" aria-modal="true" aria-labelledby="gallery-detail-title">
+        <button class="gallery-detail-modal-close" type="button" data-action="close-gallery-detail" aria-label="닫기">×</button>
+        <p class="gallery-detail-modal-label">${escapeHtml(galleryDetailModal.label)}</p>
+        <h2 id="gallery-detail-title">${escapeHtml(galleryDetailModal.title)}</h2>
+        <div class="gallery-detail-modal-content">${escapeHtml(galleryDetailModal.content)}</div>
       </section>
     </div>
   `;
@@ -954,18 +997,46 @@ function renderGallery() {
           </div>
           <div class="gallery-submission-layout">
             <div class="gallery-submission-copy">
-              <section class="gallery-detail-block">
+              <button
+                class="gallery-detail-block gallery-detail-trigger"
+                type="button"
+                data-action="open-gallery-detail"
+                data-detail-label="문제 정의와 해결 방향"
+                data-detail-title="${lesson.session}차시 · ${escapeHtml(lesson.title)}"
+                data-detail-content="${encodeURIComponent(submission.problemStatement)}"
+              >
                 <span>문제 정의와 해결 방향</span>
                 <p>${submission.problemStatement}</p>
-              </section>
-              <section class="gallery-detail-block">
+              </button>
+              <button
+                class="gallery-detail-block gallery-detail-trigger"
+                type="button"
+                data-action="open-gallery-detail"
+                data-detail-label="프롬프트"
+                data-detail-title="${lesson.session}차시 · ${escapeHtml(lesson.title)}"
+                data-detail-content="${encodeURIComponent(submission.promptText)}"
+              >
                 <span>프롬프트</span>
                 <p>${submission.promptText}</p>
-              </section>
-              <section class="gallery-detail-block">
-                <span>URL</span>
-                <a href="${submission.resultLink}" target="_blank" rel="noreferrer">${submission.resultLink}</a>
-              </section>
+              </button>
+              <div class="gallery-detail-block gallery-detail-link-block">
+                <button
+                  class="gallery-detail-trigger"
+                  type="button"
+                  data-action="open-gallery-detail"
+                  data-detail-label="URL"
+                  data-detail-title="${lesson.session}차시 · ${escapeHtml(lesson.title)}"
+                  data-detail-content="${encodeURIComponent(submission.resultLink || '아직 링크가 입력되지 않았습니다.')}"
+                >
+                  <span>URL</span>
+                  <p>${submission.resultLink || '아직 링크가 입력되지 않았습니다.'}</p>
+                </button>
+                ${
+                  submission.resultLink
+                    ? `<a class="gallery-detail-linkout" href="${submission.resultLink}" target="_blank" rel="noreferrer">열기 ↗</a>`
+                    : ''
+                }
+              </div>
             </div>
             <div class="gallery-preview-card">
               <div class="gallery-preview-visual">
@@ -1012,18 +1083,46 @@ function renderGallery() {
           </div>
           <div class="gallery-submission-layout">
             <div class="gallery-submission-copy">
-              <section class="gallery-detail-block">
+              <button
+                class="gallery-detail-block gallery-detail-trigger"
+                type="button"
+                data-action="open-gallery-detail"
+                data-detail-label="문제 정의와 해결 방향"
+                data-detail-title="${selectedLesson.session}차시 · ${escapeHtml(student.name)}"
+                data-detail-content="${encodeURIComponent(submission.problemStatement)}"
+              >
                 <span>문제 정의와 해결 방향</span>
                 <p>${submission.problemStatement}</p>
-              </section>
-              <section class="gallery-detail-block">
+              </button>
+              <button
+                class="gallery-detail-block gallery-detail-trigger"
+                type="button"
+                data-action="open-gallery-detail"
+                data-detail-label="프롬프트"
+                data-detail-title="${selectedLesson.session}차시 · ${escapeHtml(student.name)}"
+                data-detail-content="${encodeURIComponent(submission.promptText)}"
+              >
                 <span>프롬프트</span>
                 <p>${submission.promptText}</p>
-              </section>
-              <section class="gallery-detail-block">
-                <span>URL</span>
-                <a href="${submission.resultLink}" target="_blank" rel="noreferrer">${submission.resultLink}</a>
-              </section>
+              </button>
+              <div class="gallery-detail-block gallery-detail-link-block">
+                <button
+                  class="gallery-detail-trigger"
+                  type="button"
+                  data-action="open-gallery-detail"
+                  data-detail-label="URL"
+                  data-detail-title="${selectedLesson.session}차시 · ${escapeHtml(student.name)}"
+                  data-detail-content="${encodeURIComponent(submission.resultLink || '아직 링크가 입력되지 않았습니다.')}"
+                >
+                  <span>URL</span>
+                  <p>${submission.resultLink || '아직 링크가 입력되지 않았습니다.'}</p>
+                </button>
+                ${
+                  submission.resultLink
+                    ? `<a class="gallery-detail-linkout" href="${submission.resultLink}" target="_blank" rel="noreferrer">열기 ↗</a>`
+                    : ''
+                }
+              </div>
             </div>
             <div class="gallery-preview-card">
               <div class="gallery-preview-visual">
@@ -1599,8 +1698,16 @@ function render() {
       ${header(route)}
       ${page}
       ${renderAuthModal()}
+      ${renderGalleryDetailModal()}
     </div>
   `;
+
+  if (pendingTopbarScrollReset) {
+    pendingTopbarScrollReset = false;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+  }
 }
 
 app.addEventListener('click', async (event) => {
@@ -1649,6 +1756,24 @@ app.addEventListener('click', async (event) => {
   if (action === 'close-auth-modal') {
     if (target === actionTarget || target.classList.contains('auth-modal-close')) {
       closeAuthModal();
+      render();
+    }
+    return;
+  }
+
+  if (action === 'open-gallery-detail') {
+    galleryDetailModal = {
+      label: actionTarget.dataset.detailLabel ?? '상세 내용',
+      title: actionTarget.dataset.detailTitle ?? '제출 내용',
+      content: decodeURIComponent(actionTarget.dataset.detailContent ?? ''),
+    };
+    render();
+    return;
+  }
+
+  if (action === 'close-gallery-detail') {
+    if (target === actionTarget || target.classList.contains('gallery-detail-modal-close')) {
+      galleryDetailModal = null;
       render();
     }
     return;
