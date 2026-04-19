@@ -468,6 +468,7 @@ function toGallerySubmission(record: FirebaseGalleryRecord, lesson: CourseLesson
     lessonId: lesson.id,
     problemStatement: draft?.problemStatement?.trim() || '아직 문제 정의를 제출하지 않았습니다.',
     promptText: draft?.promptText?.trim() || '아직 프롬프트를 제출하지 않았습니다.',
+    reflectionNote: draft?.reflectionNote?.trim() || '아직 오늘 남기는 한 마디를 작성하지 않았습니다.',
     resultLink: draft?.resultLink?.trim() || '',
     previewStatus,
     previewTitle: preview?.title?.trim() || lesson.title,
@@ -1069,6 +1070,17 @@ function renderGallery() {
                 <span>프롬프트</span>
                 <p class="gallery-detail-text${galleryEmptyTextClass(submission.promptText)}">${submission.promptText}</p>
               </button>
+              <button
+                class="gallery-detail-block gallery-detail-trigger"
+                type="button"
+                data-action="open-gallery-detail"
+                data-detail-label="오늘 남기는 한 마디"
+                data-detail-title="${lesson.session}차시 · ${escapeHtml(lesson.title)}"
+                data-detail-content="${encodeURIComponent(submission.reflectionNote)}"
+              >
+                <span>오늘 남기는 한 마디</span>
+                <p class="gallery-detail-text${galleryEmptyTextClass(submission.reflectionNote)}">${submission.reflectionNote}</p>
+              </button>
               <div class="gallery-detail-block gallery-detail-link-block">
                 <button
                   class="gallery-detail-trigger"
@@ -1098,8 +1110,6 @@ function renderGallery() {
               </div>
               <div class="gallery-preview-body">
                 <strong>${submission.previewTitle}</strong>
-                <p>${submission.previewNote}</p>
-                <small>${submission.previewDomain}</small>
               </div>
             </div>
           </div>
@@ -1155,6 +1165,17 @@ function renderGallery() {
                 <span>프롬프트</span>
                 <p class="gallery-detail-text${galleryEmptyTextClass(submission.promptText)}">${submission.promptText}</p>
               </button>
+              <button
+                class="gallery-detail-block gallery-detail-trigger"
+                type="button"
+                data-action="open-gallery-detail"
+                data-detail-label="오늘 남기는 한 마디"
+                data-detail-title="${selectedLesson.session}차시 · ${escapeHtml(student.name)}"
+                data-detail-content="${encodeURIComponent(submission.reflectionNote)}"
+              >
+                <span>오늘 남기는 한 마디</span>
+                <p class="gallery-detail-text${galleryEmptyTextClass(submission.reflectionNote)}">${submission.reflectionNote}</p>
+              </button>
               <div class="gallery-detail-block gallery-detail-link-block">
                 <button
                   class="gallery-detail-trigger"
@@ -1184,8 +1205,6 @@ function renderGallery() {
               </div>
               <div class="gallery-preview-body">
                 <strong>${submission.previewTitle}</strong>
-                <p>${submission.previewNote}</p>
-                <small>${submission.previewDomain}</small>
               </div>
             </div>
           </div>

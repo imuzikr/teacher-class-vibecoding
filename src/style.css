@@ -2377,7 +2377,7 @@ button:focus-visible {
 }
 
 .gallery-detail-text.is-empty {
-  color: rgba(214, 221, 236, 0.56);
+  color: rgba(214, 221, 236, 0.42);
 }
 
 .gallery-preview-card {
@@ -2402,9 +2402,6 @@ button:focus-visible {
 
 .gallery-preview-body {
   padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .gallery-preview-body strong {
@@ -2412,24 +2409,6 @@ button:focus-visible {
   font-size: 1rem;
 }
 
-.gallery-preview-body p {
-  color: rgba(218, 226, 253, 0.7);
-  font-size: 0.92rem;
-  line-height: 1.7;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-}
-
-.gallery-preview-body small {
-  color: rgba(189, 244, 255, 0.72);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .gallery-detail-modal-backdrop {
   position: fixed;

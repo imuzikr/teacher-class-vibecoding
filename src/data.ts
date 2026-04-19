@@ -541,12 +541,14 @@ function gallerySubmission(
   resultLink: string,
   previewTitle: string,
   previewNote: string,
+  reflectionNote = '',
 ) {
   return {
     lessonId,
     previewStatus,
     problemStatement,
     promptText,
+    reflectionNote,
     resultLink,
     previewTitle,
     previewNote,

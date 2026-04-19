@@ -86,6 +86,7 @@ export interface GallerySubmission {
   lessonId: string;
   problemStatement: string;
   promptText: string;
+  reflectionNote: string;
   resultLink: string;
   previewStatus: 'published' | 'reviewing' | 'draft';
   previewTitle: string;
