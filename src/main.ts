@@ -1092,7 +1092,7 @@ function classroomSidebar() {
     <aside class="dashboard-sidebar">
       <div class="dashboard-sidebar-head">
         <strong>${appName}</strong>
-        <p>${courseLabel}</p>
+        <p><span>교사 개발자가 되기 위한 8차시</span><span>Vibe Coding 코스</span></p>
       </div>
       <nav class="dashboard-session-nav" aria-label="세션 탐색">
         ${courseLessons

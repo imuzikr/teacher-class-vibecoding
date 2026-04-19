@@ -1701,6 +1701,105 @@ button:focus-visible {
   font-size: 0.95rem;
 }
 
+@media (max-width: 1100px) {
+  .public-landing-page {
+    padding-inline: 28px;
+  }
+
+  .public-particle-hero {
+    min-height: min(66vh, 680px);
+  }
+
+  .public-particle-copy {
+    width: min(940px, calc(100% - 24px));
+  }
+
+  .public-particle-copy h1 {
+    font-size: clamp(3.4rem, 8.8vw, 6.4rem);
+  }
+
+  .public-particle-copy p span {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 780px) {
+  .public-topbar {
+    padding: 20px 18px 0;
+    align-items: flex-start;
+  }
+
+  .public-topbar .auth-action-group {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .public-landing-page {
+    min-height: calc(100vh - 80px);
+    padding: 8px 18px 28px;
+    gap: 22px;
+  }
+
+  .public-particle-hero {
+    min-height: 58vh;
+  }
+
+  .public-particle-copy {
+    width: calc(100% - 8px);
+    gap: 14px;
+  }
+
+  .public-particle-copy h1 {
+    font-size: clamp(2.4rem, 12vw, 4.6rem);
+    line-height: 1.02;
+  }
+
+  .public-particle-copy p {
+    font-size: 0.98rem;
+    line-height: 1.7;
+  }
+
+  .public-landing-footnote {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 540px) {
+  .public-topbar {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .public-topbar-actions,
+  .public-topbar .auth-action-group {
+    width: 100%;
+  }
+
+  .public-topbar .auth-action-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .public-topbar .auth-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .public-particle-hero {
+    min-height: 52vh;
+  }
+
+  .public-particle-copy h1 {
+    font-size: clamp(2rem, 12.5vw, 3.5rem);
+    gap: 4px;
+  }
+
+  .public-particle-copy p {
+    font-size: 0.92rem;
+  }
+}
+
 .dashboard-app {
   width: 100%;
   margin: 0;
@@ -1834,6 +1933,10 @@ button:focus-visible {
 
 .dashboard-sidebar-head p {
   font-size: 0.85rem;
+}
+
+.dashboard-sidebar-head p span {
+  display: block;
 }
 
 .dashboard-session-nav {
@@ -2663,6 +2766,10 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .gallery-hero {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-sidebar {
     position: static;
   }
@@ -2705,7 +2812,30 @@ button:focus-visible {
   }
 
   .dashboard-app .topbar {
-    padding: 18px 20px;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    gap: 14px;
+    padding: 16px 18px;
+  }
+
+  .dashboard-app .topbar-start,
+  .dashboard-app .topnav-centered,
+  .dashboard-app .topbar-end {
+    grid-column: auto;
+    justify-self: stretch;
+  }
+
+  .dashboard-app .topbar-start {
+    justify-content: flex-start;
+  }
+
+  .dashboard-app .topnav-centered {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-app .topbar-end {
+    justify-content: flex-end;
   }
 
   .dashboard-main,
@@ -2729,6 +2859,32 @@ button:focus-visible {
   .curriculum-card h3 {
     min-height: 0;
     font-size: 1.75rem;
+  }
+
+  .gallery-main {
+    padding: 24px 20px 34px;
+  }
+
+  .gallery-hero {
+    padding: 22px 18px;
+  }
+
+  .gallery-hero-copy h1 {
+    font-size: clamp(1.8rem, 8vw, 2.4rem);
+  }
+
+  .gallery-submission-card {
+    padding: 18px;
+  }
+
+  .gallery-submission-head {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .gallery-status {
+    min-width: 0;
+    align-self: flex-start;
   }
 }
 
@@ -3864,5 +4020,105 @@ button:focus-visible {
 
   .lesson-anchor-nav {
     grid-template-columns: 1fr;
+  }
+
+  .lesson-topbar-brand {
+    min-width: 0;
+  }
+
+  .lesson-shell-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .lesson-top-grid,
+  .lesson-content-grid,
+  .lesson-inline-reading-grid {
+    gap: 18px;
+  }
+
+  .lesson-canvas-panel,
+  .lesson-side-panel,
+  .lesson-submission-panel,
+  .lesson-reading-panel {
+    padding: 20px 18px;
+  }
+}
+
+@media (max-width: 540px) {
+  .dashboard-app .topbar-start {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .dashboard-app .topbar-end .auth-action-group,
+  .lesson-shell-actions .auth-action-group {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-sidebar,
+  .dashboard-main {
+    padding: 20px 16px;
+  }
+
+  .dashboard-hero h1 {
+    font-size: clamp(2.5rem, 16vw, 4rem);
+  }
+
+  .curriculum-card {
+    padding: 18px;
+  }
+
+  .curriculum-card h3 {
+    font-size: 1.45rem;
+  }
+
+  .gallery-sidebar,
+  .gallery-main {
+    padding-inline: 16px;
+  }
+
+  .gallery-sidebar-tab {
+    font-size: 0.88rem;
+  }
+
+  .gallery-hero-copy p,
+  .gallery-detail-block p,
+  .gallery-detail-block a {
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+
+  .gallery-preview-body {
+    padding: 14px;
+  }
+
+  .lesson-shell-topbar {
+    padding: 14px 16px;
+  }
+
+  .lesson-workspace-main {
+    padding: 20px 16px 28px;
+  }
+
+  .lesson-overview h1 {
+    font-size: clamp(1.85rem, 10vw, 2.5rem);
+  }
+
+  .lesson-overview p,
+  .lesson-canvas-copy p,
+  .lesson-flow-list li,
+  .lesson-reading-card p,
+  .lesson-vocab-stack p {
+    font-size: 0.95rem;
+    line-height: 1.75;
+  }
+
+  .lesson-session-picker-summary,
+  .lesson-session-picker-menu {
+    width: 100%;
   }
 }
