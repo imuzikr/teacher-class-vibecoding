@@ -384,6 +384,10 @@ function truncateSessionLabel(title: string, maxLength = 22) {
   return `${title.slice(0, maxLength).trimEnd()}...`;
 }
 
+function galleryEmptyTextClass(text: string) {
+  return text.trim().startsWith('아직 ') ? ' is-empty' : '';
+}
+
 function renderSessionArtwork(lesson: CourseLesson) {
   const generatedImagePath = `/session-artworks/${lesson.id}.png`;
 
@@ -1052,7 +1056,7 @@ function renderGallery() {
                 data-detail-content="${encodeURIComponent(submission.problemStatement)}"
               >
                 <span>문제 정의와 해결 방향</span>
-                <p>${submission.problemStatement}</p>
+                <p class="gallery-detail-text${galleryEmptyTextClass(submission.problemStatement)}">${submission.problemStatement}</p>
               </button>
               <button
                 class="gallery-detail-block gallery-detail-trigger"
@@ -1063,7 +1067,7 @@ function renderGallery() {
                 data-detail-content="${encodeURIComponent(submission.promptText)}"
               >
                 <span>프롬프트</span>
-                <p>${submission.promptText}</p>
+                <p class="gallery-detail-text${galleryEmptyTextClass(submission.promptText)}">${submission.promptText}</p>
               </button>
               <div class="gallery-detail-block gallery-detail-link-block">
                 <button
@@ -1075,7 +1079,7 @@ function renderGallery() {
                   data-detail-content="${encodeURIComponent(submission.resultLink || '아직 링크가 입력되지 않았습니다.')}"
                 >
                   <span>URL</span>
-                  <p>${submission.resultLink || '아직 링크가 입력되지 않았습니다.'}</p>
+                  <p class="gallery-detail-text${galleryEmptyTextClass(submission.resultLink || '아직 링크가 입력되지 않았습니다.')}">${submission.resultLink || '아직 링크가 입력되지 않았습니다.'}</p>
                 </button>
                 ${
                   submission.resultLink
@@ -1138,7 +1142,7 @@ function renderGallery() {
                 data-detail-content="${encodeURIComponent(submission.problemStatement)}"
               >
                 <span>문제 정의와 해결 방향</span>
-                <p>${submission.problemStatement}</p>
+                <p class="gallery-detail-text${galleryEmptyTextClass(submission.problemStatement)}">${submission.problemStatement}</p>
               </button>
               <button
                 class="gallery-detail-block gallery-detail-trigger"
@@ -1149,7 +1153,7 @@ function renderGallery() {
                 data-detail-content="${encodeURIComponent(submission.promptText)}"
               >
                 <span>프롬프트</span>
-                <p>${submission.promptText}</p>
+                <p class="gallery-detail-text${galleryEmptyTextClass(submission.promptText)}">${submission.promptText}</p>
               </button>
               <div class="gallery-detail-block gallery-detail-link-block">
                 <button
@@ -1161,7 +1165,7 @@ function renderGallery() {
                   data-detail-content="${encodeURIComponent(submission.resultLink || '아직 링크가 입력되지 않았습니다.')}"
                 >
                   <span>URL</span>
-                  <p>${submission.resultLink || '아직 링크가 입력되지 않았습니다.'}</p>
+                  <p class="gallery-detail-text${galleryEmptyTextClass(submission.resultLink || '아직 링크가 입력되지 않았습니다.')}">${submission.resultLink || '아직 링크가 입력되지 않았습니다.'}</p>
                 </button>
                 ${
                   submission.resultLink

@@ -2376,6 +2376,10 @@ button:focus-visible {
   word-break: break-word;
 }
 
+.gallery-detail-text.is-empty {
+  color: rgba(214, 221, 236, 0.56);
+}
+
 .gallery-preview-card {
   border-radius: 12px;
   overflow: hidden;
