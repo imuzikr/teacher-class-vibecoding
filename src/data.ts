@@ -474,7 +474,7 @@ export const courseLessons: CourseLesson[] = [
     stage: 'ship',
     stageLabel: '서비스 완성',
     difficulty: '중급',
-    title: 'API 관리와 보안을 위한 서버리스와 CDN',
+    title: '서버리스와 CDN',
     summary: 'API 키를 숨기고 빠른 응답을 제공하기 위해 왜 서버리스와 CDN이 필요한지 이해합니다.',
     promise: '클라이언트에 비밀 정보를 그대로 두지 않고, 사용자에게는 더 빠른 화면을 제공하는 운영 감각을 익히며 과정을 마무리합니다.',
     learningGoal: '서버리스와 CDN의 역할, 차이점, 그리고 API 보안 및 성능과의 관계를 이해하는 것이 목표입니다.',
