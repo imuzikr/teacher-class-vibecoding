@@ -1,6 +1,6 @@
 import type { CourseLesson, GalleryStudent, HighlightCard, LearnerPromise } from './types.ts';
 
-export const appName = 'Vibe Coding for Teacher';
+export const appName = 'Vibe Coding for Teachers';
 export const courseLabel = '교사 개발자가 되기 위한 8차시 Vibe Coding 코스';
 
 export const landingHighlights: HighlightCard[] = [

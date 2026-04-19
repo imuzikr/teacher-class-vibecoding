@@ -56,6 +56,7 @@ let authMode: 'login' | 'signup' = 'login';
 let authSubmitting = false;
 let authErrorMessage = '';
 let pendingTopbarScrollReset = false;
+let publicLandingCleanup: (() => void) | null = null;
 let galleryDetailModal:
   | {
       label: string;
@@ -254,6 +255,228 @@ function resetFieldSaveVisual(target: HTMLElement) {
     statusText.classList.remove('visible');
     statusText.textContent = statusText.dataset.defaultStatus ?? '입력 후 저장 버튼을 눌러 반영하세요.';
   }
+}
+
+function teardownPublicLandingScene() {
+  if (publicLandingCleanup) {
+    publicLandingCleanup();
+    publicLandingCleanup = null;
+  }
+}
+
+function setupPublicLandingScene() {
+  teardownPublicLandingScene();
+
+  const stage = app.querySelector<HTMLElement>('.public-particle-hero');
+  const canvas = app.querySelector<HTMLCanvasElement>('.public-particle-canvas');
+  if (!stage || !canvas) {
+    teardownPublicLandingScene();
+    return;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return;
+  }
+
+  const stageElement = stage;
+  const canvasElement = canvas;
+  const drawingContext = context;
+
+  let animationFrame = 0;
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+  let frame = 0;
+  const mouse = { x: -9999, y: -9999 };
+  let targets: { x: number; y: number }[] = [];
+  let particles: {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    r: number;
+    g: number;
+    b: number;
+    life: number;
+    speed: number;
+    angle: number;
+    orbitR: number;
+  }[] = [];
+
+  const heroText = ['교사를 위한', 'Vibe Coding', '학습 여정'];
+  const colorA: [number, number, number] = [133, 255, 214];
+  const colorB: [number, number, number] = [132, 55, 195];
+  const particleCount = 5600;
+  const particleSize = 1.7;
+  const speed = 0.11;
+  const mouseRepel = 120;
+
+  function lerpColor(left: [number, number, number], right: [number, number, number], ratio: number) {
+    return [
+      Math.round(left[0] + (right[0] - left[0]) * ratio),
+      Math.round(left[1] + (right[1] - left[1]) * ratio),
+      Math.round(left[2] + (right[2] - left[2]) * ratio),
+    ] as const;
+  }
+
+  function resize() {
+    const rect = stageElement.getBoundingClientRect();
+    width = Math.max(320, Math.floor(rect.width));
+    height = Math.max(360, Math.floor(rect.height));
+    dpr = window.devicePixelRatio || 1;
+
+    canvasElement.width = width * dpr;
+    canvasElement.height = height * dpr;
+    canvasElement.style.width = `${width}px`;
+    canvasElement.style.height = `${height}px`;
+    drawingContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    buildTargets();
+    if (!particles.length) {
+      reinitParticles();
+    }
+  }
+
+  function buildTargets() {
+    const offscreen = document.createElement('canvas');
+    offscreen.width = width;
+    offscreen.height = height;
+    const offscreenContext = offscreen.getContext('2d');
+    if (!offscreenContext) {
+      return;
+    }
+
+    const fontSize = Math.min(Math.max(52, width * 0.104), 132);
+    const lineHeight = fontSize * 1.02;
+    const totalHeight = heroText.length * lineHeight;
+    const startY = height / 2 - totalHeight / 2 + lineHeight * 0.5;
+
+    offscreenContext.clearRect(0, 0, width, height);
+    offscreenContext.fillStyle = '#ffffff';
+    offscreenContext.textAlign = 'center';
+    offscreenContext.textBaseline = 'middle';
+    offscreenContext.font = `800 ${fontSize}px Pretendard Variable, Pretendard, SUIT Variable, Noto Sans KR, sans-serif`;
+
+    heroText.forEach((line, index) => {
+      offscreenContext.fillText(line, width / 2, startY + index * lineHeight);
+    });
+
+    const image = offscreenContext.getImageData(0, 0, width, height).data;
+    const points: { x: number; y: number }[] = [];
+    const step = Math.max(2, Math.floor(width / 340));
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const imageIndex = (y * width + x) * 4;
+        if (image[imageIndex + 3] > 96) {
+          points.push({ x, y });
+        }
+      }
+    }
+
+    for (let index = points.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [points[index], points[swapIndex]] = [points[swapIndex], points[index]];
+    }
+
+    targets = points;
+  }
+
+  function reinitParticles() {
+    particles = Array.from({ length: particleCount }, (_, index) => {
+      const ratio = index / particleCount;
+      const [r, g, b] = lerpColor(colorA, colorB, ratio);
+      return {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: 0,
+        vy: 0,
+        r,
+        g,
+        b,
+        life: Math.random(),
+        speed: 0.5 + Math.random() * 1.5,
+        angle: Math.random() * Math.PI * 2,
+        orbitR: 20 + Math.random() * 72,
+      };
+    });
+  }
+
+  function tick() {
+    animationFrame = window.requestAnimationFrame(tick);
+    drawingContext.clearRect(0, 0, width, height);
+    frame += 1;
+
+    if (!targets.length) {
+      return;
+    }
+
+    for (let index = 0; index < particles.length; index += 1) {
+      const particle = particles[index];
+      const target = targets[index % targets.length];
+
+      particle.angle += 0.012 * particle.speed;
+      const targetX = target.x + Math.cos(particle.angle) * (10 + particle.orbitR * 0.18);
+      const targetY = target.y + Math.sin(particle.angle) * (6 + particle.orbitR * 0.1);
+      let accelerationX = (targetX - particle.x) * speed * 1.35;
+      let accelerationY = (targetY - particle.y) * speed * 1.35;
+
+      const diffX = particle.x - mouse.x;
+      const diffY = particle.y - mouse.y;
+      const distance = Math.sqrt(diffX * diffX + diffY * diffY);
+      if (distance > 0 && distance < mouseRepel) {
+        const force = (mouseRepel - distance) / mouseRepel;
+        accelerationX += (diffX / distance) * force * 8;
+        accelerationY += (diffY / distance) * force * 8;
+      }
+
+      particle.vx = (particle.vx + accelerationX) * 0.88;
+      particle.vy = (particle.vy + accelerationY) * 0.88;
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+
+      particle.life += 0.005 * particle.speed;
+      const alpha = 0.62 + 0.34 * Math.sin(particle.life * Math.PI * 2 + frame * 0.002);
+
+      drawingContext.beginPath();
+      drawingContext.arc(particle.x, particle.y, particleSize, 0, Math.PI * 2);
+      drawingContext.fillStyle = `rgba(${particle.r}, ${particle.g}, ${particle.b}, ${alpha.toFixed(2)})`;
+      drawingContext.fill();
+    }
+  }
+
+  function handleMouseMove(event: MouseEvent) {
+    const rect = canvasElement.getBoundingClientRect();
+    mouse.x = event.clientX - rect.left;
+    mouse.y = event.clientY - rect.top;
+  }
+
+  function handleMouseLeave() {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  }
+
+  const resizeObserver = new ResizeObserver(() => {
+    resize();
+    reinitParticles();
+  });
+
+  resize();
+  reinitParticles();
+  tick();
+
+  resizeObserver.observe(stageElement);
+  window.addEventListener('resize', resize);
+  stageElement.addEventListener('mousemove', handleMouseMove);
+  stageElement.addEventListener('mouseleave', handleMouseLeave);
+
+  publicLandingCleanup = () => {
+    window.cancelAnimationFrame(animationFrame);
+    resizeObserver.disconnect();
+    window.removeEventListener('resize', resize);
+    stageElement.removeEventListener('mousemove', handleMouseMove);
+    stageElement.removeEventListener('mouseleave', handleMouseLeave);
+  };
 }
 
 function scrollToSection(sectionId: string) {
@@ -559,7 +782,7 @@ function userInitials(user: AuthenticatedUser | null) {
 }
 
 function authActionsMarkup(compact = false) {
-  const userName = currentUser?.displayName?.trim() || 'Teacher';
+  const userName = currentUser?.displayName?.trim() || 'Teachers';
   const avatarLabel = userInitials(currentUser);
   const className = compact ? 'auth-button compact' : 'auth-button';
 
@@ -754,6 +977,20 @@ function nextLessonFor(lesson: CourseLesson) {
 }
 
 function header(route: AppRoute) {
+  if (route.view === 'landing' && !currentUser) {
+    return `
+      <header class="public-topbar">
+        <a class="public-brand" href="#/" data-route="#/">
+          <strong>${appName}</strong>
+          <small>${courseLabel}</small>
+        </a>
+        <div class="public-topbar-actions">
+          ${authActionsMarkup()}
+        </div>
+      </header>
+    `;
+  }
+
   if (route.view === 'lesson') {
     return `
       <header class="lesson-shell-topbar">
@@ -987,7 +1224,43 @@ function renderClassroom() {
 }
 
 function renderLanding() {
-  return renderClassroom();
+  if (currentUser) {
+    return renderClassroom();
+  }
+
+  return `
+    <main class="public-landing-page">
+      <section class="public-particle-hero">
+        <canvas class="public-particle-canvas" aria-hidden="true"></canvas>
+        <div class="public-particle-copy">
+          <span class="public-landing-kicker">Vibe Coding for Teachers</span>
+          <h1 aria-label="교사를 위한 바이브 코딩 학습 여정">
+            <span>교사를 위한</span>
+            <span>Vibe Coding</span>
+            <span>학습 여정</span>
+          </h1>
+          <p>
+            <span>메일머지, Antigravity, Firebase, API, 서버리스와 CDN까지. 수업과 업무 흐름 속에서 바로 써볼 수 있는</span>
+            <span>AI 서비스 제작 여정을 8차시에 걸쳐 차근차근 따라갑니다.</span>
+          </p>
+        </div>
+      </section>
+      <section class="public-landing-footnote">
+        <div class="public-landing-stat">
+          <strong>8차시</strong>
+          <span>기초부터 서비스 운영 감각까지</span>
+        </div>
+        <div class="public-landing-stat">
+          <strong>실습 중심</strong>
+          <span>문제 정의, 프롬프트, 결과물 제출까지</span>
+        </div>
+        <div class="public-landing-stat">
+          <strong>교사 맞춤</strong>
+          <span>수업과 업무 흐름에 바로 연결하는 바이브 코딩</span>
+        </div>
+      </section>
+    </main>
+  `;
 }
 
 function renderGallery() {
@@ -1757,14 +2030,27 @@ function render() {
       break;
   }
 
+  const isDashboardShell =
+    route.view === 'classroom' ||
+    route.view === 'lesson' ||
+    route.view === 'gallery' ||
+    (route.view === 'landing' && !!currentUser);
+  const isPublicLanding = route.view === 'landing' && !currentUser;
+
   app.innerHTML = `
-    <div class="app-frame ${route.view === 'classroom' || route.view === 'landing' || route.view === 'lesson' || route.view === 'gallery' ? 'dashboard-app' : ''}">
+    <div class="app-frame ${isDashboardShell ? 'dashboard-app' : ''} ${isPublicLanding ? 'public-app' : ''}">
       ${header(route)}
       ${page}
       ${renderAuthModal()}
       ${renderGalleryDetailModal()}
     </div>
   `;
+
+  if (isPublicLanding) {
+    setupPublicLandingScene();
+  } else {
+    teardownPublicLandingScene();
+  }
 
   if (pendingTopbarScrollReset) {
     pendingTopbarScrollReset = false;
