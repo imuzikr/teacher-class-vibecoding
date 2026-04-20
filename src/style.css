@@ -1581,35 +1581,21 @@ button:focus-visible {
 }
 
 .public-landing-page {
-  min-height: calc(100vh - 92px);
-  padding: 12px 40px 40px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 28px;
-}
-
-.public-landing-kicker {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: rgba(189, 244, 255, 0.09);
-  color: #bdf4ff;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
+    min-height: calc(100vh - 92px);
+    padding: 0 40px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 28px;
+  }
+  
 .public-particle-hero {
-  position: relative;
-  min-height: min(72vh, 760px);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-}
+    position: relative;
+    min-height: min(68vh, 720px);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
 
 .public-particle-hero::before {
   content: '';
@@ -1631,16 +1617,17 @@ button:focus-visible {
 }
 
 .public-particle-copy {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  width: min(1100px, calc(100% - 40px));
-  text-align: center;
-  pointer-events: none;
-}
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    width: min(1100px, calc(100% - 40px));
+    text-align: center;
+    pointer-events: none;
+    transform: translateY(-34px);
+  }
 
 .public-particle-copy h1 {
   display: flex;
@@ -1707,12 +1694,13 @@ button:focus-visible {
   }
 
   .public-particle-hero {
-    min-height: min(66vh, 680px);
-  }
-
+      min-height: min(64vh, 650px);
+    }
+  
   .public-particle-copy {
-    width: min(940px, calc(100% - 24px));
-  }
+      width: min(940px, calc(100% - 24px));
+      transform: translateY(-24px);
+    }
 
   .public-particle-copy h1 {
     font-size: clamp(3.4rem, 8.8vw, 6.4rem);
@@ -1745,9 +1733,10 @@ button:focus-visible {
   }
 
   .public-particle-copy {
-    width: calc(100% - 8px);
-    gap: 14px;
-  }
+      width: calc(100% - 8px);
+      gap: 14px;
+      transform: none;
+    }
 
   .public-particle-copy h1 {
     font-size: clamp(2.4rem, 12vw, 4.6rem);

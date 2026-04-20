@@ -1230,21 +1230,20 @@ function renderLanding() {
 
   return `
     <main class="public-landing-page">
-      <section class="public-particle-hero">
-        <canvas class="public-particle-canvas" aria-hidden="true"></canvas>
-        <div class="public-particle-copy">
-          <span class="public-landing-kicker">Vibe Coding for Teachers</span>
-          <h1 aria-label="교사를 위한 바이브 코딩 학습 여정">
-            <span>교사를 위한</span>
-            <span>Vibe Coding</span>
-            <span>학습 여정</span>
-          </h1>
-          <p>
-            <span>메일머지, Antigravity, Firebase, API, 서버리스와 CDN까지. 수업과 업무 흐름 속에서 바로 써볼 수 있는</span>
-            <span>AI 서비스 제작 여정을 8차시에 걸쳐 차근차근 따라갑니다.</span>
-          </p>
-        </div>
-      </section>
+        <section class="public-particle-hero">
+          <canvas class="public-particle-canvas" aria-hidden="true"></canvas>
+          <div class="public-particle-copy">
+            <h1 aria-label="교사를 위한 바이브 코딩 학습 여정">
+              <span>교사를 위한</span>
+              <span>Vibe Coding</span>
+              <span>학습 여정</span>
+            </h1>
+            <p>
+              <span>메일머지, Antigravity, Firebase, API, 서버리스와 CDN까지.</span>
+              <span>수업과 업무 흐름 속에서 바로 써볼 수 있는 AI 서비스 제작 여정을 8차시에 걸쳐 차근차근 따라갑니다.</span>
+            </p>
+          </div>
+        </section>
       <section class="public-landing-footnote">
         <div class="public-landing-stat">
           <strong>8차시</strong>
