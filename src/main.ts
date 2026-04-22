@@ -1,5 +1,5 @@
 import './style.css';
-import { appName, courseLabel, courseLessons } from './data.ts';
+import { appName, courseLabel, courseLessons, galleryStudents } from './data.ts';
 import {
   clearLessonThumbnail,
   fetchGalleryRecords,
@@ -47,10 +47,19 @@ document.title = `${appName} | 초보자용 8차시 코스`;
 const app = appRoot;
 const totalLessons = courseLessons.length;
 const submissionFields = ['problemStatement', 'promptText', 'reflectionNote', 'resultLink'] as const;
+const demoMode =
+  (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') &&
+  new URLSearchParams(window.location.search).get('demo') === '1';
+const demoUser: AuthenticatedUser = {
+  uid: 'demo-user',
+  displayName: 'Demo Teacher',
+  email: 'demo@local.dev',
+  photoURL: '',
+};
 const savedSubmissionKeys = new Set<string>();
 let lastPreviewStatus: { lessonId: string; state: 'idle' | 'loading' | 'success' | 'error'; message: string } | null = null;
-let currentUser: AuthenticatedUser | null = null;
-let authReady = !hasFirebaseConfig;
+let currentUser: AuthenticatedUser | null = demoMode ? demoUser : null;
+let authReady = demoMode || !hasFirebaseConfig;
 let hydratedUserId: string | null = null;
 let firebaseGalleryStudents: GalleryStudent[] = [];
 let firebaseGalleryRecords: FirebaseGalleryRecord[] = [];
@@ -662,6 +671,64 @@ function progressSummary() {
   };
 }
 
+function buildDemoStateFromStudent(student: GalleryStudent): PersistedState {
+  const submissionsByLesson = student.submissions.reduce<PersistedState['submissionsByLesson']>((accumulator, submission) => {
+    accumulator[submission.lessonId] = {
+      problemStatement: submission.problemStatement,
+      promptText: submission.promptText,
+      reflectionNote: submission.reflectionNote || submission.previewNote,
+      resultLink: submission.resultLink,
+    };
+    return accumulator;
+  }, {});
+
+  const previewsByLesson = student.submissions.reduce<PersistedState['previewsByLesson']>((accumulator, submission) => {
+    accumulator[submission.lessonId] = {
+      title: submission.previewTitle,
+      description: submission.previewNote,
+      image: '',
+      siteName: submission.previewDomain || extractHostname(submission.resultLink),
+      favicon: '',
+      url: submission.resultLink,
+    };
+    return accumulator;
+  }, {});
+
+  const completedLessonIds = Object.entries(submissionsByLesson)
+    .filter(([, draft]) => submissionFields.every((field) => Boolean(draft[field].trim())))
+    .map(([lessonId]) => lessonId);
+
+  return {
+    completedLessonIds,
+    lastVisitedLessonId: courseLessons[0]?.id ?? null,
+    submissionsByLesson,
+    previewsByLesson,
+  };
+}
+
+function buildDemoGalleryRecords() {
+  return galleryStudents.map((student, index) => ({
+    uid: index === 0 ? demoUser.uid : student.id,
+    displayName: student.name,
+    email: `${student.id}@demo.local`,
+    photoURL: '',
+    state: buildDemoStateFromStudent(student),
+    thumbnailsByLesson: {},
+  })) satisfies FirebaseGalleryRecord[];
+}
+
+function activateDemoMode() {
+  currentUser = demoUser;
+  authReady = true;
+  hydratedUserId = demoUser.uid;
+  firebaseGalleryRecords = buildDemoGalleryRecords();
+  firebaseGalleryStudents = firebaseGalleryRecords.map((record) => toGalleryStudent(record));
+  const demoRecord = firebaseGalleryRecords.find((record) => record.uid === demoUser.uid);
+  if (demoRecord?.state) {
+    replaceState(demoRecord.state);
+  }
+}
+
 type SubmissionFieldKey = (typeof submissionFields)[number];
 
 interface LessonScoreSummary {
@@ -964,7 +1031,7 @@ function growthMetrics(state: PersistedState | null | undefined) {
       score: clamp(problemScore, 0, 100),
       summary:
         problemEntries.length > 0
-          ? `평균 ${Math.round(problemAverageLength)}자, 구조화된 문제/해결 서술 ${Math.round(problemStructuredRatio * 100)}%`
+          ? `문제 상황과 해결 방향이 함께 드러날수록 점수가 높아집니다.`
           : '아직 문제 정의 입력이 없습니다.',
     },
     {
@@ -972,7 +1039,7 @@ function growthMetrics(state: PersistedState | null | undefined) {
       score: clamp(promptScore, 0, 100),
       summary:
         promptEntries.length > 0
-          ? `평균 ${Math.round(promptAverageLength)}자, 줄바꿈형 프롬프트 ${Math.round(promptStructuredRatio * 100)}%`
+          ? `맥락, 형식, 제약 조건이 드러나는 프롬프트일수록 점수가 높아집니다.`
           : '아직 프롬프트 입력이 없습니다.',
     },
     {
@@ -980,7 +1047,7 @@ function growthMetrics(state: PersistedState | null | undefined) {
       score: clamp(reflectionScore, 0, 100),
       summary:
         reflectionEntries.length > 0
-          ? `이유 설명 ${Math.round(reflectionReasonRatio * 100)}%, 다음 행동 언급 ${Math.round(reflectionNextRatio * 100)}%`
+          ? `이유 설명과 다음 행동 계획이 함께 적힐수록 점수가 높아집니다.`
           : '아직 회고 입력이 없습니다.',
     },
     {
@@ -1148,6 +1215,12 @@ function activeGalleryStudents() {
 }
 
 async function refreshGalleryStudents() {
+  if (demoMode) {
+    activateDemoMode();
+    render();
+    return;
+  }
+
   if (!hasFirebaseConfig || !currentUser) {
     firebaseGalleryStudents = [];
     firebaseGalleryRecords = [];
@@ -1293,7 +1366,7 @@ function renderGalleryDetailModal() {
 }
 
 async function syncStateToCloud() {
-  if (!currentUser || !hasFirebaseConfig) {
+  if (demoMode || !currentUser || !hasFirebaseConfig) {
     return;
   }
 
@@ -1306,6 +1379,12 @@ async function syncStateToCloud() {
 }
 
 async function hydrateUserState(user: AuthenticatedUser) {
+  if (demoMode) {
+    activateDemoMode();
+    render();
+    return;
+  }
+
   if (!hasFirebaseConfig) {
     return;
   }
@@ -1692,10 +1771,6 @@ function renderDashboard() {
         <div>
           <p class="insights-kicker">Learning Analytics</p>
           <h1>${currentLearnerName}님의 학습 대시보드</h1>
-          <p>
-            제출 항목 1개당 2.5점, 한 차시 최대 10점 기준으로 진행도를 계산했습니다.
-            아래에서는 차시별 제출 현황과 사고 성장 흐름을 함께 볼 수 있습니다.
-          </p>
         </div>
         <div class="insights-hero-score">
           <span>Total Score</span>
@@ -1759,7 +1834,6 @@ function renderDashboard() {
             <p class="insights-section-label">Thinking Growth Dashboard</p>
             <h2>문제 정의부터 회고까지 사고의 밀도 보기</h2>
           </div>
-          <p class="insights-section-note">텍스트 길이, 줄 수, 키워드, 링크 제출 연속성을 바탕으로 계산합니다.</p>
         </div>
 
         <div class="growth-dashboard-grid">
@@ -2923,6 +2997,12 @@ if (!window.location.hash) {
 }
 
 subscribeToAuth(async (user) => {
+  if (demoMode && !user) {
+    activateDemoMode();
+    render();
+    return;
+  }
+
   authReady = true;
   currentUser = user;
 
