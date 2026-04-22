@@ -32,6 +32,7 @@ import type {
   GalleryStudent,
   GallerySubmission,
   LinkPreviewData,
+  PersistedState,
 } from './types.ts';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -45,12 +46,14 @@ document.title = `${appName} | 초보자용 8차시 코스`;
 
 const app = appRoot;
 const totalLessons = courseLessons.length;
+const submissionFields = ['problemStatement', 'promptText', 'reflectionNote', 'resultLink'] as const;
 const savedSubmissionKeys = new Set<string>();
 let lastPreviewStatus: { lessonId: string; state: 'idle' | 'loading' | 'success' | 'error'; message: string } | null = null;
 let currentUser: AuthenticatedUser | null = null;
 let authReady = !hasFirebaseConfig;
 let hydratedUserId: string | null = null;
 let firebaseGalleryStudents: GalleryStudent[] = [];
+let firebaseGalleryRecords: FirebaseGalleryRecord[] = [];
 let authModalOpen = false;
 let authMode: 'login' | 'signup' = 'login';
 let authSubmitting = false;
@@ -113,7 +116,7 @@ function submissionFieldMessages(field: string) {
 }
 
 function isProtectedRoute(route: AppRoute) {
-  return route.view === 'lesson' || route.view === 'gallery';
+  return route.view === 'lesson' || route.view === 'gallery' || route.view === 'dashboard';
 }
 
 function openAuthModal(mode: 'login' | 'signup') {
@@ -166,6 +169,10 @@ function parseRoute(): AppRoute {
     return { view: 'gallery', mode: 'student' };
   }
 
+  if (hash === '/dashboard') {
+    return { view: 'dashboard' };
+  }
+
   if (hash.startsWith('/gallery/student/')) {
     const studentId = hash.replace('/gallery/student/', '').trim();
     if (studentId) {
@@ -203,12 +210,12 @@ function parseRoute(): AppRoute {
 function navigateTo(route: string) {
   const nextHash = route.replace(/^#/, '');
   galleryDetailModal = null;
-  if (!currentUser && (nextHash.startsWith('/lesson/') || nextHash.startsWith('/gallery'))) {
+  if (!currentUser && (nextHash.startsWith('/lesson/') || nextHash.startsWith('/gallery') || nextHash === '/dashboard')) {
     openAuthModal('login');
     return;
   }
 
-  const shouldResetScroll = nextHash === '/' || nextHash.startsWith('/gallery');
+  const shouldResetScroll = nextHash === '/' || nextHash.startsWith('/gallery') || nextHash === '/dashboard';
 
   if (window.location.hash === route) {
     if (shouldResetScroll) {
@@ -655,6 +662,403 @@ function progressSummary() {
   };
 }
 
+type SubmissionFieldKey = (typeof submissionFields)[number];
+
+interface LessonScoreSummary {
+  lesson: CourseLesson;
+  score: number;
+  filledCount: number;
+  fields: Record<SubmissionFieldKey, boolean>;
+}
+
+interface DashboardStudentScore {
+  id: string;
+  name: string;
+  totalScore: number;
+  percent: number;
+  completedLessons: number;
+}
+
+interface GrowthMetric {
+  label: string;
+  score: number;
+  summary: string;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function ratio(value: number, max: number) {
+  if (max <= 0) {
+    return 0;
+  }
+
+  return clamp(value / max, 0, 1);
+}
+
+function isFilledText(value: string | undefined | null) {
+  return Boolean(value?.trim());
+}
+
+function linesOf(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function uniqueKeywordHits(value: string, keywords: string[]) {
+  const normalized = value.toLowerCase();
+  return keywords.reduce((count, keyword) => count + (normalized.includes(keyword.toLowerCase()) ? 1 : 0), 0);
+}
+
+function entryCountWithKeywords(entries: string[], leftKeywords: string[], rightKeywords: string[]) {
+  return entries.filter((entry) => {
+    const normalized = entry.toLowerCase();
+    return (
+      leftKeywords.some((keyword) => normalized.includes(keyword.toLowerCase())) &&
+      rightKeywords.some((keyword) => normalized.includes(keyword.toLowerCase()))
+    );
+  }).length;
+}
+
+function isValidUrl(value: string) {
+  if (!value.trim()) {
+    return false;
+  }
+
+  try {
+    const target = new URL(value);
+    return target.protocol === 'http:' || target.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function longestFilledStreak(values: string[]) {
+  let currentStreak = 0;
+  let maxStreak = 0;
+
+  values.forEach((value) => {
+    if (value.trim()) {
+      currentStreak += 1;
+      maxStreak = Math.max(maxStreak, currentStreak);
+      return;
+    }
+
+    currentStreak = 0;
+  });
+
+  return maxStreak;
+}
+
+function stateForRecord(record: FirebaseGalleryRecord | null | undefined) {
+  return record?.state ?? null;
+}
+
+function localDashboardRecord() {
+  if (!currentUser) {
+    return null;
+  }
+
+  return {
+    uid: currentUser.uid,
+    displayName: currentUser.displayName,
+    email: currentUser.email,
+    photoURL: currentUser.photoURL,
+    state: getState(),
+    thumbnailsByLesson: {},
+  } satisfies FirebaseGalleryRecord;
+}
+
+function activeDashboardRecords() {
+  const localRecord = localDashboardRecord();
+  if (!localRecord) {
+    return firebaseGalleryRecords;
+  }
+
+  if (firebaseGalleryRecords.some((record) => record.uid === localRecord.uid)) {
+    return firebaseGalleryRecords;
+  }
+
+  return [localRecord, ...firebaseGalleryRecords];
+}
+
+function currentUserDashboardState() {
+  const records = activeDashboardRecords();
+  const currentUserId = currentUser?.uid;
+  const matchingRecord = currentUserId ? records.find((record) => record.uid === currentUserId) : null;
+  return matchingRecord?.state ?? getState();
+}
+
+function lessonScoreSummaries(state: PersistedState | null | undefined) {
+  return courseLessons.map((lesson) => {
+    const draft = state?.submissionsByLesson?.[lesson.id];
+    const fields = {
+      problemStatement: isFilledText(draft?.problemStatement),
+      promptText: isFilledText(draft?.promptText),
+      reflectionNote: isFilledText(draft?.reflectionNote),
+      resultLink: isFilledText(draft?.resultLink),
+    };
+    const filledCount = submissionFields.filter((field) => fields[field]).length;
+
+    return {
+      lesson,
+      score: filledCount * 2.5,
+      filledCount,
+      fields,
+    } satisfies LessonScoreSummary;
+  });
+}
+
+function totalScoreFromState(state: PersistedState | null | undefined) {
+  return lessonScoreSummaries(state).reduce((sum, summary) => sum + summary.score, 0);
+}
+
+function latestReflectionFromState(state: PersistedState | null | undefined) {
+  for (let index = courseLessons.length - 1; index >= 0; index -= 1) {
+    const lesson = courseLessons[index];
+    const reflection = state?.submissionsByLesson?.[lesson.id]?.reflectionNote?.trim();
+    if (reflection) {
+      return {
+        lesson,
+        reflection,
+      };
+    }
+  }
+
+  return null;
+}
+
+function progressOverviewData(state: PersistedState | null | undefined) {
+  const lessonScores = lessonScoreSummaries(state);
+  const completedLessons = lessonScores.filter((summary) => summary.score === 10).length;
+  const linkCount = lessonScores.filter((summary) => summary.fields.resultLink).length;
+  const mostWorkedLesson =
+    lessonScores
+      .filter((summary) => summary.score > 0)
+      .sort((left, right) => right.score - left.score || right.lesson.session - left.lesson.session)[0] ?? null;
+  const latestReflection = latestReflectionFromState(state);
+  const totalScore = lessonScores.reduce((sum, summary) => sum + summary.score, 0);
+
+  return {
+    lessonScores,
+    completedLessons,
+    linkCount,
+    mostWorkedLesson,
+    latestReflection,
+    totalScore,
+    percent: Math.round((totalScore / (totalLessons * 10)) * 100),
+  };
+}
+
+function studentScoreRows() {
+  return activeDashboardRecords()
+    .map((record) => {
+      const totalScore = totalScoreFromState(stateForRecord(record));
+
+      return {
+        id: record.uid,
+        name: record.displayName || record.email || '학습자',
+        totalScore,
+        percent: Math.round((totalScore / (totalLessons * 10)) * 100),
+        completedLessons: lessonScoreSummaries(stateForRecord(record)).filter((summary) => summary.score === 10).length,
+      } satisfies DashboardStudentScore;
+    })
+    .sort((left, right) => right.totalScore - left.totalScore || left.name.localeCompare(right.name, 'ko'));
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength).trimEnd()}…`;
+}
+
+function growthMetrics(state: PersistedState | null | undefined) {
+  const problemEntries = courseLessons
+    .map((lesson) => state?.submissionsByLesson?.[lesson.id]?.problemStatement?.trim() || '')
+    .filter(Boolean);
+  const promptEntries = courseLessons
+    .map((lesson) => state?.submissionsByLesson?.[lesson.id]?.promptText?.trim() || '')
+    .filter(Boolean);
+  const reflectionEntries = courseLessons
+    .map((lesson) => state?.submissionsByLesson?.[lesson.id]?.reflectionNote?.trim() || '')
+    .filter(Boolean);
+  const linkEntries = courseLessons.map((lesson) => state?.submissionsByLesson?.[lesson.id]?.resultLink?.trim() || '');
+
+  const problemCorpus = problemEntries.join(' ');
+  const promptCorpus = promptEntries.join(' ');
+  const reflectionCorpus = reflectionEntries.join(' ');
+
+  const problemKeywords = ['문제', '어려움', '불편', '학생', '수업', '교사', '학급', '해결', '개선', '지원'];
+  const solutionKeywords = ['해결', '개선', '도움', '자동화', '정리', '설계', '구현', '만들'];
+  const promptContextKeywords = ['학생', '교사', '수업', '학급', '초등', '중등', '고등', '활동', '예시', '프로젝트'];
+  const promptFormatKeywords = ['표', '목록', '단계', '형식', '길이', '톤', '예시', '출력', 'json', 'bullet'];
+  const promptConstraintKeywords = ['반드시', '포함', '제외', '하지 말', '최대', '최소', '먼저', '다음'];
+  const reflectionKeywords = ['배웠', '알게', '느꼈', '재미', '어려웠', '아쉬웠', '성공', '시도', '개선', '다음'];
+  const reflectionReasonKeywords = ['왜냐', '때문', '그래서', '덕분', '하지만', '그래도'];
+  const reflectionNextKeywords = ['다음', '앞으로', '다음엔', '다음에는', '더', '개선'];
+
+  const problemAverageLength =
+    problemEntries.reduce((sum, entry) => sum + entry.length, 0) / Math.max(problemEntries.length, 1);
+  const problemAverageLines =
+    problemEntries.reduce((sum, entry) => sum + linesOf(entry).length, 0) / Math.max(problemEntries.length, 1);
+  const problemStructuredRatio =
+    problemEntries.length > 0
+      ? entryCountWithKeywords(problemEntries, problemKeywords, solutionKeywords) / problemEntries.length
+      : 0;
+  const problemScore = Math.round(
+    ratio(problemAverageLength, 120) * 35 +
+      ratio(problemAverageLines, 3) * 15 +
+      ratio(uniqueKeywordHits(problemCorpus, [...problemKeywords, ...solutionKeywords]), 8) * 25 +
+      problemStructuredRatio * 25,
+  );
+
+  const promptAverageLength =
+    promptEntries.reduce((sum, entry) => sum + entry.length, 0) / Math.max(promptEntries.length, 1);
+  const promptStructuredRatio =
+    promptEntries.length > 0 ? promptEntries.filter((entry) => linesOf(entry).length >= 2).length / promptEntries.length : 0;
+  const promptScore = Math.round(
+    ratio(promptAverageLength, 180) * 30 +
+      promptStructuredRatio * 20 +
+      ratio(uniqueKeywordHits(promptCorpus, promptContextKeywords), 6) * 25 +
+      ratio(uniqueKeywordHits(promptCorpus, [...promptFormatKeywords, ...promptConstraintKeywords]), 8) * 25,
+  );
+
+  const reflectionAverageLength =
+    reflectionEntries.reduce((sum, entry) => sum + entry.length, 0) / Math.max(reflectionEntries.length, 1);
+  const reflectionReasonRatio =
+    reflectionEntries.length > 0
+      ? reflectionEntries.filter((entry) => uniqueKeywordHits(entry, reflectionReasonKeywords) > 0).length / reflectionEntries.length
+      : 0;
+  const reflectionNextRatio =
+    reflectionEntries.length > 0
+      ? reflectionEntries.filter((entry) => uniqueKeywordHits(entry, reflectionNextKeywords) > 0).length / reflectionEntries.length
+      : 0;
+  const reflectionScore = Math.round(
+    ratio(reflectionAverageLength, 100) * 30 +
+      ratio(uniqueKeywordHits(reflectionCorpus, reflectionKeywords), 6) * 25 +
+      reflectionReasonRatio * 20 +
+      reflectionNextRatio * 25,
+  );
+
+  const submittedLinkCount = linkEntries.filter((entry) => entry.trim()).length;
+  const validLinkCount = linkEntries.filter((entry) => isValidUrl(entry)).length;
+  const recentWindow = linkEntries.slice(-3);
+  const recentRatio = recentWindow.filter((entry) => entry.trim()).length / Math.max(recentWindow.length, 1);
+  const linkScore = Math.round(
+    ratio(submittedLinkCount, totalLessons) * 45 +
+      ratio(longestFilledStreak(linkEntries), 3) * 25 +
+      (submittedLinkCount > 0 ? validLinkCount / submittedLinkCount : 0) * 20 +
+      recentRatio * 10,
+  );
+
+  return [
+    {
+      label: '문제 정의 밀도',
+      score: clamp(problemScore, 0, 100),
+      summary:
+        problemEntries.length > 0
+          ? `평균 ${Math.round(problemAverageLength)}자, 구조화된 문제/해결 서술 ${Math.round(problemStructuredRatio * 100)}%`
+          : '아직 문제 정의 입력이 없습니다.',
+    },
+    {
+      label: '프롬프트 구체성',
+      score: clamp(promptScore, 0, 100),
+      summary:
+        promptEntries.length > 0
+          ? `평균 ${Math.round(promptAverageLength)}자, 줄바꿈형 프롬프트 ${Math.round(promptStructuredRatio * 100)}%`
+          : '아직 프롬프트 입력이 없습니다.',
+    },
+    {
+      label: '회고 깊이',
+      score: clamp(reflectionScore, 0, 100),
+      summary:
+        reflectionEntries.length > 0
+          ? `이유 설명 ${Math.round(reflectionReasonRatio * 100)}%, 다음 행동 언급 ${Math.round(reflectionNextRatio * 100)}%`
+          : '아직 회고 입력이 없습니다.',
+    },
+    {
+      label: '결과물 제출 지속성',
+      score: clamp(linkScore, 0, 100),
+      summary:
+        submittedLinkCount > 0
+          ? `${submittedLinkCount}/${totalLessons}차시 링크 제출, 최장 연속 ${longestFilledStreak(linkEntries)}차시`
+          : '아직 결과물 링크가 없습니다.',
+    },
+  ] satisfies GrowthMetric[];
+}
+
+function radarPoint(index: number, total: number, radius: number, center = 160) {
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / total;
+  return {
+    x: center + Math.cos(angle) * radius,
+    y: center + Math.sin(angle) * radius,
+  };
+}
+
+function renderRadarChart(metrics: GrowthMetric[]) {
+  const total = metrics.length;
+  const levels = [0.25, 0.5, 0.75, 1];
+  const grid = levels
+    .map((level) => {
+      const points = metrics
+        .map((_, index) => {
+          const point = radarPoint(index, total, 110 * level);
+          return `${point.x},${point.y}`;
+        })
+        .join(' ');
+      return `<polygon points="${points}" class="growth-radar-grid" />`;
+    })
+    .join('');
+  const axes = metrics
+    .map((_, index) => {
+      const point = radarPoint(index, total, 110);
+      return `<line x1="160" y1="160" x2="${point.x}" y2="${point.y}" class="growth-radar-axis" />`;
+    })
+    .join('');
+  const dataPoints = metrics
+    .map((metric, index) => {
+      const point = radarPoint(index, total, 110 * (metric.score / 100));
+      return `${point.x},${point.y}`;
+    })
+    .join(' ');
+  const labels = metrics
+    .map((metric, index) => {
+      const point = radarPoint(index, total, 138);
+      const textAnchor = index === 1 ? 'start' : index === 3 ? 'end' : 'middle';
+      const verticalOffset = index === 0 ? -8 : index === 2 ? 18 : 4;
+      return `
+        <text x="${point.x}" y="${point.y + verticalOffset}" text-anchor="${textAnchor}" class="growth-radar-label">
+          ${metric.label}
+        </text>
+        <text x="${point.x}" y="${point.y + verticalOffset + 18}" text-anchor="${textAnchor}" class="growth-radar-value">
+          ${metric.score}점
+        </text>
+      `;
+    })
+    .join('');
+
+  return `
+    <svg class="growth-radar" viewBox="0 0 320 320" role="img" aria-label="Thinking Growth Dashboard 레이더 차트">
+      ${grid}
+      ${axes}
+      <polygon points="${dataPoints}" class="growth-radar-shape" />
+      ${dataPoints
+        .split(' ')
+        .map((point) => {
+          const [x, y] = point.split(',');
+          return `<circle cx="${x}" cy="${y}" r="4.5" class="growth-radar-dot" />`;
+        })
+        .join('')}
+      ${labels}
+    </svg>
+  `;
+}
+
 function galleryRoleFromEmail(email: string) {
   if (!email) {
     return '수강생';
@@ -744,12 +1148,14 @@ function activeGalleryStudents() {
 async function refreshGalleryStudents() {
   if (!hasFirebaseConfig || !currentUser) {
     firebaseGalleryStudents = [];
+    firebaseGalleryRecords = [];
     render();
     return;
   }
 
   try {
     const records = await fetchGalleryRecords();
+    firebaseGalleryRecords = records;
     firebaseGalleryStudents = records
       .map((record) => toGalleryStudent(record))
       .sort((left, right) => {
@@ -763,6 +1169,7 @@ async function refreshGalleryStudents() {
       });
   } catch {
     firebaseGalleryStudents = [];
+    firebaseGalleryRecords = [];
   }
 
   render();
@@ -953,7 +1360,7 @@ function currentGalleryLesson(route: AppRoute) {
   return courseLessons[0];
 }
 
-function navIcon(type: 'home' | 'gallery') {
+function navIcon(type: 'home' | 'gallery' | 'dashboard') {
   if (type === 'home') {
     return `
       <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
@@ -962,14 +1369,48 @@ function navIcon(type: 'home' | 'gallery') {
     `;
   }
 
+  if (type === 'gallery') {
+    return `
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <rect x="3" y="4" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <rect x="11.8" y="4" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <rect x="3" y="10.8" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <rect x="11.8" y="10.8" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+    `;
+  }
+
   return `
     <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <rect x="3" y="4" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
-      <rect x="11.8" y="4" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
-      <rect x="3" y="10.8" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
-      <rect x="11.8" y="10.8" width="5.2" height="5.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M4 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M5.2 13.6V9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M10 13.6V5.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M14.8 13.6V8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
+}
+
+function routeMatches(route: AppRoute, view: 'home' | 'gallery' | 'dashboard') {
+  if (view === 'home') {
+    return route.view === 'landing' || route.view === 'classroom';
+  }
+
+  return route.view === view;
+}
+
+function primaryNav(route: AppRoute, linkClass: 'lesson-shell-link' | 'nav-link') {
+  const items = [
+    { key: 'home', label: 'Home', route: '#/' },
+    { key: 'gallery', label: 'Gallery', route: '#/gallery' },
+    { key: 'dashboard', label: 'Dashboard', route: '#/dashboard' },
+  ] as const;
+
+  return items
+    .map((item) => {
+      const active = routeMatches(route, item.key) ? ' active' : '';
+      return `<button class="${linkClass}${active}" type="button" data-route="${item.route}">${navIcon(item.key)}<span>${item.label}</span></button>`;
+    })
+    .join('');
 }
 
 function nextLessonFor(lesson: CourseLesson) {
@@ -999,8 +1440,7 @@ function header(route: AppRoute) {
           <small>${courseLabel}</small>
         </a>
         <nav class="lesson-shell-nav" aria-label="주요 탐색">
-          <button class="lesson-shell-link active" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
-          <button class="lesson-shell-link" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+          ${primaryNav(route, 'lesson-shell-link')}
         </nav>
         <div class="lesson-shell-actions">
           ${authActionsMarkup()}
@@ -1017,8 +1457,24 @@ function header(route: AppRoute) {
           <small>${courseLabel}</small>
         </a>
         <nav class="lesson-shell-nav" aria-label="주요 탐색">
-          <button class="lesson-shell-link" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
-          <button class="lesson-shell-link active" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+          ${primaryNav(route, 'lesson-shell-link')}
+        </nav>
+        <div class="lesson-shell-actions">
+          ${authActionsMarkup()}
+        </div>
+      </header>
+    `;
+  }
+
+  if (route.view === 'dashboard') {
+    return `
+      <header class="lesson-shell-topbar">
+        <a class="lesson-topbar-brand" href="#/" data-route="#/">
+          <strong>${appName}</strong>
+          <small>${courseLabel}</small>
+        </a>
+        <nav class="lesson-shell-nav" aria-label="주요 탐색">
+          ${primaryNav(route, 'lesson-shell-link')}
         </nav>
         <div class="lesson-shell-actions">
           ${authActionsMarkup()}
@@ -1034,8 +1490,7 @@ function header(route: AppRoute) {
           <strong class="topbar-title">Course Dashboard</strong>
         </div>
         <nav class="topnav topnav-centered" aria-label="주요 탐색">
-          <button class="nav-link active" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
-          <button class="nav-link" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+          ${primaryNav(route, 'nav-link')}
         </nav>
         <div class="topbar-end">
           ${authActionsMarkup(true)}
@@ -1056,8 +1511,7 @@ function header(route: AppRoute) {
         </a>
         <strong class="topbar-title">Course Dashboard</strong>
         <nav class="topnav" aria-label="주요 탐색">
-          <button class="nav-link active" type="button" data-route="#/">${navIcon('home')}<span>Home</span></button>
-          <button class="nav-link" type="button" data-route="#/gallery">${navIcon('gallery')}<span>Gallery</span></button>
+          ${primaryNav(route, 'nav-link')}
         </nav>
       </div>
       <label class="topbar-search" aria-label="커리큘럼 검색">
@@ -1111,7 +1565,7 @@ function classroomSidebar() {
       </nav>
       <div class="dashboard-sidebar-tools">
         <button class="dashboard-resource-button" type="button" data-route="#/gallery">Gallery</button>
-        <button class="dashboard-tool-link" type="button" data-route="#/">Docs</button>
+        <button class="dashboard-tool-link" type="button" data-route="#/dashboard">Dashboard</button>
       </div>
       <div class="dashboard-profile">
         <div class="dashboard-profile-avatar">VC</div>
@@ -1218,6 +1672,177 @@ function renderClassroom() {
             <span>System Status</span>
           </div>
         </footer>
+      </section>
+    </main>
+  `;
+}
+
+function renderDashboard() {
+  const state = currentUserDashboardState();
+  const progress = progressOverviewData(state);
+  const students = studentScoreRows();
+  const metrics = growthMetrics(state);
+  const currentLearnerName = currentUser?.displayName?.trim() || '학습자';
+
+  return `
+    <main class="insights-page">
+      <section class="insights-hero">
+        <div>
+          <p class="insights-kicker">Learning Analytics</p>
+          <h1>${currentLearnerName}님의 학습 대시보드</h1>
+          <p>
+            제출 항목 1개당 2.5점, 한 차시 최대 10점 기준으로 진행도를 계산했습니다.
+            아래에서는 차시별 제출 현황과 사고 성장 흐름을 함께 볼 수 있습니다.
+          </p>
+        </div>
+        <div class="insights-hero-score">
+          <span>Total Score</span>
+          <strong>${progress.totalScore.toFixed(1)}</strong>
+          <small>/ ${totalLessons * 10}점</small>
+        </div>
+      </section>
+
+      <section class="insights-section">
+        <div class="insights-section-head">
+          <div>
+            <p class="insights-section-label">Progress Overview</p>
+            <h2>제출 흐름과 전체 수강생 비교</h2>
+          </div>
+          <p class="insights-section-note">각 입력 항목을 채울 때마다 2.5점씩 누적됩니다.</p>
+        </div>
+
+        <div class="progress-card-grid">
+          <article class="progress-stat-card">
+            <span>완료한 차시 수</span>
+            <strong>${progress.completedLessons}</strong>
+            <small>모든 제출물을 채운 차시 기준</small>
+          </article>
+          <article class="progress-stat-card">
+            <span>링크 제출 수</span>
+            <strong>${progress.linkCount}</strong>
+            <small>결과물 링크를 저장한 차시 수</small>
+          </article>
+          <article class="progress-stat-card">
+            <span>가장 많이 작업한 차시</span>
+            <strong>${progress.mostWorkedLesson ? `${progress.mostWorkedLesson.lesson.session}차시` : '-'}</strong>
+            <small>
+              ${
+                progress.mostWorkedLesson
+                  ? `${progress.mostWorkedLesson.lesson.title} · ${progress.mostWorkedLesson.score.toFixed(1)}점`
+                  : '아직 제출을 시작한 차시가 없습니다.'
+              }
+            </small>
+          </article>
+          <article class="progress-stat-card progress-stat-card-wide">
+            <span>최근 작성한 반성 메모</span>
+            <strong>${progress.latestReflection ? `${progress.latestReflection.lesson.session}차시` : '-'}</strong>
+            <small>
+              ${
+                progress.latestReflection
+                  ? truncateText(progress.latestReflection.reflection, 92)
+                  : '아직 반성 메모가 저장되지 않았습니다.'
+              }
+            </small>
+          </article>
+        </div>
+
+        <div class="insights-chart-grid">
+          <article class="insights-panel-card">
+            <div class="insights-panel-head">
+              <div>
+                <p class="insights-section-label">8차시 진행률</p>
+                <h3>차시별 점수 막대 차트</h3>
+              </div>
+              <span>${progress.percent}% complete</span>
+            </div>
+            <div class="lesson-score-chart" role="img" aria-label="8차시 진행률 막대 차트">
+              ${progress.lessonScores
+                .map(
+                  (summary) => `
+                    <div class="lesson-score-column">
+                      <span class="lesson-score-value">${summary.score.toFixed(summary.score % 1 === 0 ? 0 : 1)}</span>
+                      <div class="lesson-score-bar-track">
+                        <span class="lesson-score-bar-fill" style="height: ${Math.max((summary.score / 10) * 100, summary.score > 0 ? 8 : 0)}%"></span>
+                      </div>
+                      <strong>${summary.lesson.session}차시</strong>
+                    </div>
+                  `,
+                )
+                .join('')}
+            </div>
+          </article>
+
+          <article class="insights-panel-card">
+            <div class="insights-panel-head">
+              <div>
+                <p class="insights-section-label">Class Scoreboard</p>
+                <h3>전체 수강생 점수 비교</h3>
+              </div>
+              <span>총점 ${totalLessons * 10}점 기준</span>
+            </div>
+            <div class="student-scoreboard" role="img" aria-label="전체 수강생 점수 막대 차트">
+              ${
+                students.length > 0
+                  ? students
+                      .map(
+                        (student) => `
+                          <div class="student-score-row">
+                            <div class="student-score-meta">
+                              <strong>${student.name}${student.id === currentUser?.uid ? ' (나)' : ''}</strong>
+                              <span>${student.completedLessons}개 차시 완료</span>
+                            </div>
+                            <div class="student-score-track">
+                              <span class="student-score-fill" style="width: ${student.percent}%"></span>
+                            </div>
+                            <div class="student-score-value">${student.totalScore.toFixed(student.totalScore % 1 === 0 ? 0 : 1)}점</div>
+                          </div>
+                        `,
+                      )
+                      .join('')
+                  : `<p class="student-score-empty">아직 비교할 수강생 데이터가 없습니다.</p>`
+              }
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="insights-section">
+        <div class="insights-section-head">
+          <div>
+            <p class="insights-section-label">Thinking Growth Dashboard</p>
+            <h2>문제 정의부터 회고까지 사고의 밀도 보기</h2>
+          </div>
+          <p class="insights-section-note">텍스트 길이, 줄 수, 키워드, 링크 제출 연속성을 바탕으로 계산합니다.</p>
+        </div>
+
+        <div class="growth-dashboard-grid">
+          <article class="insights-panel-card growth-radar-card">
+            <div class="insights-panel-head">
+              <div>
+                <p class="insights-section-label">Radar View</p>
+                <h3>강점과 빈 구간 한눈에 보기</h3>
+              </div>
+              <span>0-100 scale</span>
+            </div>
+            ${renderRadarChart(metrics)}
+          </article>
+
+          <div class="growth-metrics-stack">
+            ${metrics
+              .map(
+                (metric) => `
+                  <article class="growth-metric-card">
+                    <div class="growth-metric-head">
+                      <strong>${metric.label}</strong>
+                      <span>${metric.score}점</span>
+                    </div>
+                    <p>${metric.summary}</p>
+                  </article>
+                `,
+              )
+              .join('')}
+          </div>
+        </div>
       </section>
     </main>
   `;
@@ -2021,6 +2646,9 @@ function render() {
     case 'classroom':
       page = renderClassroom();
       break;
+    case 'dashboard':
+      page = renderDashboard();
+      break;
     case 'lesson':
       page = lesson ? renderLesson(lesson) : renderLanding();
       break;
@@ -2031,6 +2659,7 @@ function render() {
 
   const isDashboardShell =
     route.view === 'classroom' ||
+    route.view === 'dashboard' ||
     route.view === 'lesson' ||
     route.view === 'gallery' ||
     (route.view === 'landing' && !!currentUser);

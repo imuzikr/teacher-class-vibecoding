@@ -1,6 +1,7 @@
 export type AppRoute =
   | { view: 'landing' }
   | { view: 'classroom' }
+  | { view: 'dashboard' }
   | { view: 'lesson'; lessonId: string }
   | { view: 'gallery'; mode: 'student'; studentId?: string }
   | { view: 'gallery'; mode: 'lesson'; lessonId?: string };

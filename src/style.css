@@ -2328,6 +2328,385 @@ button:focus-visible {
   gap: 22px;
 }
 
+.insights-page {
+  min-height: calc(100vh - 72px);
+  padding: 40px;
+  background:
+    radial-gradient(circle at top right, rgba(110, 205, 255, 0.16), transparent 24%),
+    radial-gradient(circle at left center, rgba(94, 122, 255, 0.14), transparent 22%),
+    #08111f;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.insights-hero,
+.insights-section,
+.insights-panel-card,
+.progress-stat-card,
+.growth-metric-card {
+  border: 1px solid rgba(190, 214, 255, 0.08);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+}
+
+.insights-hero {
+  padding: 30px 32px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(18, 30, 53, 0.96), rgba(10, 19, 34, 0.96));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.insights-kicker,
+.insights-section-label {
+  margin: 0 0 8px;
+  color: #91efff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.insights-hero h1,
+.insights-section-head h2,
+.insights-panel-head h3,
+.growth-metric-head strong,
+.progress-stat-card strong {
+  color: #f4f7ff;
+}
+
+.insights-hero h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1.05;
+}
+
+.insights-hero p,
+.insights-section-note,
+.progress-stat-card span,
+.progress-stat-card small,
+.insights-panel-head span,
+.student-score-meta span,
+.growth-metric-card p,
+.student-score-empty {
+  color: rgba(220, 230, 255, 0.72);
+}
+
+.insights-hero p {
+  max-width: 760px;
+  margin: 14px 0 0;
+  line-height: 1.7;
+}
+
+.insights-hero-score {
+  min-width: 180px;
+  padding: 20px 22px;
+  border-radius: 20px;
+  background: rgba(146, 231, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insights-hero-score span,
+.insights-hero-score small {
+  color: rgba(220, 230, 255, 0.72);
+}
+
+.insights-hero-score strong {
+  color: #91efff;
+  font-family: var(--display);
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.insights-section {
+  padding: 28px;
+  border-radius: 28px;
+  background: rgba(10, 18, 33, 0.92);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.insights-section-head,
+.insights-panel-head,
+.growth-metric-head,
+.student-score-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.insights-section-head h2,
+.insights-panel-head h3 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.insights-section-note,
+.insights-panel-head span {
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.progress-card-grid,
+.insights-chart-grid,
+.growth-dashboard-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.progress-card-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.progress-stat-card {
+  min-height: 152px;
+  padding: 22px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(16, 28, 49, 0.98), rgba(8, 15, 28, 0.98));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progress-stat-card strong {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.progress-stat-card span {
+  font-size: 0.88rem;
+}
+
+.progress-stat-card small {
+  margin-top: auto;
+  line-height: 1.6;
+}
+
+.progress-stat-card-wide {
+  grid-column: span 2;
+}
+
+.insights-chart-grid,
+.growth-dashboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.insights-panel-card {
+  min-height: 100%;
+  padding: 22px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(17, 29, 52, 0.98), rgba(9, 16, 29, 0.98));
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.lesson-score-chart {
+  min-height: 290px;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.lesson-score-column {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.lesson-score-value,
+.student-score-value,
+.growth-metric-head span {
+  color: #91efff;
+  font-weight: 700;
+}
+
+.lesson-score-bar-track {
+  width: 100%;
+  max-width: 48px;
+  height: 200px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.lesson-score-bar-fill {
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #8ef2ff, #4d74ff);
+  box-shadow: 0 0 24px rgba(77, 116, 255, 0.32);
+}
+
+.lesson-score-column strong,
+.student-score-meta strong {
+  color: #f4f7ff;
+  font-size: 0.95rem;
+}
+
+.student-scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.student-score-row {
+  align-items: center;
+}
+
+.student-score-meta {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.student-score-track {
+  flex: 1;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.student-score-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #91efff, #5476ff);
+}
+
+.student-score-value {
+  width: 56px;
+  text-align: right;
+}
+
+.growth-radar-card {
+  align-items: center;
+}
+
+.growth-radar {
+  width: min(100%, 420px);
+  height: auto;
+}
+
+.growth-radar-grid,
+.growth-radar-axis {
+  fill: none;
+  stroke: rgba(210, 224, 255, 0.18);
+  stroke-width: 1;
+}
+
+.growth-radar-shape {
+  fill: rgba(145, 239, 255, 0.2);
+  stroke: #91efff;
+  stroke-width: 2;
+}
+
+.growth-radar-dot {
+  fill: #91efff;
+}
+
+.growth-radar-label {
+  fill: #f4f7ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.growth-radar-value {
+  fill: rgba(220, 230, 255, 0.72);
+  font-size: 10px;
+}
+
+.growth-metrics-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.growth-metric-card {
+  padding: 20px 22px;
+  border-radius: 22px;
+  background: rgba(15, 26, 46, 0.96);
+}
+
+.growth-metric-card p {
+  margin: 12px 0 0;
+  line-height: 1.7;
+}
+
+.student-score-empty {
+  margin: 0;
+  padding: 18px 0;
+}
+
+@media (max-width: 1180px) {
+  .progress-card-grid,
+  .insights-chart-grid,
+  .growth-dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .progress-stat-card-wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 860px) {
+  .insights-page {
+    padding: 24px 18px 32px;
+  }
+
+  .insights-hero,
+  .insights-section {
+    padding: 22px 18px;
+    border-radius: 22px;
+  }
+
+  .insights-hero,
+  .insights-section-head,
+  .insights-panel-head,
+  .student-score-row {
+    flex-direction: column;
+  }
+
+  .progress-card-grid,
+  .insights-chart-grid,
+  .growth-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-stat-card-wide {
+    grid-column: span 1;
+  }
+
+  .lesson-score-chart {
+    gap: 8px;
+  }
+
+  .lesson-score-bar-track {
+    height: 160px;
+  }
+
+  .student-score-meta,
+  .student-score-value {
+    width: 100%;
+    text-align: left;
+  }
+}
+
 .gallery-page {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
