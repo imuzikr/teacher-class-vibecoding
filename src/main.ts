@@ -1071,12 +1071,17 @@ function radarPoint(index: number, total: number, radius: number, center = 160) 
 
 function renderRadarChart(metrics: GrowthMetric[]) {
   const total = metrics.length;
+  const centerX = 220;
+  const centerY = 190;
+  const chartRadius = 118;
+  const labelRadius = 172;
   const levels = [0.25, 0.5, 0.75, 1];
   const grid = levels
     .map((level) => {
       const points = metrics
         .map((_, index) => {
-          const point = radarPoint(index, total, 110 * level);
+          const point = radarPoint(index, total, chartRadius * level, centerX);
+          point.y += centerY - centerX;
           return `${point.x},${point.y}`;
         })
         .join(' ');
@@ -1085,26 +1090,35 @@ function renderRadarChart(metrics: GrowthMetric[]) {
     .join('');
   const axes = metrics
     .map((_, index) => {
-      const point = radarPoint(index, total, 110);
-      return `<line x1="160" y1="160" x2="${point.x}" y2="${point.y}" class="growth-radar-axis" />`;
+      const point = radarPoint(index, total, chartRadius, centerX);
+      point.y += centerY - centerX;
+      return `<line x1="${centerX}" y1="${centerY}" x2="${point.x}" y2="${point.y}" class="growth-radar-axis" />`;
     })
     .join('');
   const dataPoints = metrics
     .map((metric, index) => {
-      const point = radarPoint(index, total, 110 * (metric.score / 100));
+      const point = radarPoint(index, total, chartRadius * (metric.score / 100), centerX);
+      point.y += centerY - centerX;
       return `${point.x},${point.y}`;
     })
     .join(' ');
   const labels = metrics
     .map((metric, index) => {
-      const point = radarPoint(index, total, 138);
+      const point = radarPoint(index, total, labelRadius, centerX);
+      point.y += centerY - centerX;
       const textAnchor = index === 1 ? 'start' : index === 3 ? 'end' : 'middle';
-      const verticalOffset = index === 0 ? -8 : index === 2 ? 18 : 4;
+      const verticalOffset = index === 0 ? -12 : index === 2 ? 18 : 4;
+      const labelLines =
+        metric.label === '프롬프트 구체성'
+          ? ['프롬프트', '구체성']
+          : metric.label === '결과물 제출 지속성'
+            ? ['결과물 제출', '지속성']
+            : [metric.label];
       return `
         <text x="${point.x}" y="${point.y + verticalOffset}" text-anchor="${textAnchor}" class="growth-radar-label">
-          ${metric.label}
+          ${labelLines.map((line, lineIndex) => `<tspan x="${point.x}" dy="${lineIndex === 0 ? 0 : 16}">${line}</tspan>`).join('')}
         </text>
-        <text x="${point.x}" y="${point.y + verticalOffset + 18}" text-anchor="${textAnchor}" class="growth-radar-value">
+        <text x="${point.x}" y="${point.y + verticalOffset + (labelLines.length > 1 ? 34 : 20)}" text-anchor="${textAnchor}" class="growth-radar-value">
           ${metric.score}점
         </text>
       `;
@@ -1112,7 +1126,7 @@ function renderRadarChart(metrics: GrowthMetric[]) {
     .join('');
 
   return `
-    <svg class="growth-radar" viewBox="0 0 320 320" role="img" aria-label="Thinking Growth Dashboard 레이더 차트">
+    <svg class="growth-radar" viewBox="0 0 460 400" role="img" aria-label="Thinking Growth Dashboard 레이더 차트">
       ${grid}
       ${axes}
       <polygon points="${dataPoints}" class="growth-radar-shape" />
