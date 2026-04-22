@@ -1107,7 +1107,7 @@ function renderRadarChart(metrics: GrowthMetric[]) {
       const point = radarPoint(index, total, labelRadius, centerX);
       point.y += centerY - centerX;
       const textAnchor = index === 1 ? 'start' : index === 3 ? 'end' : 'middle';
-      const verticalOffset = index === 0 ? -12 : index === 2 ? 18 : 4;
+      const verticalOffset = index === 0 ? 8 : index === 2 ? 18 : 4;
       const labelLines =
         metric.label === '프롬프트 구체성'
           ? ['프롬프트', '구체성']
@@ -1624,7 +1624,7 @@ function classroomHero() {
   return `
     <section class="dashboard-hero">
       <div class="dashboard-kicker-row">
-        <span class="dashboard-kicker">Summer 2026</span>
+        <span class="dashboard-kicker">2026</span>
         <div class="dashboard-line"></div>
       </div>
       <h1>Curriculum Journey</h1>
