@@ -675,6 +675,7 @@ interface DashboardStudentScore {
   id: string;
   name: string;
   totalScore: number;
+  normalizedScore: number;
   percent: number;
   completedLessons: number;
 }
@@ -862,6 +863,7 @@ function studentScoreRows() {
         id: record.uid,
         name: record.displayName || record.email || '학습자',
         totalScore,
+        normalizedScore: Math.round((totalScore / (totalLessons * 10)) * 100),
         percent: Math.round((totalScore / (totalLessons * 10)) * 100),
         completedLessons: lessonScoreSummaries(stateForRecord(record)).filter((summary) => summary.score === 10).length,
       } satisfies DashboardStudentScore;
@@ -1697,8 +1699,8 @@ function renderDashboard() {
         </div>
         <div class="insights-hero-score">
           <span>Total Score</span>
-          <strong>${progress.totalScore.toFixed(1)}</strong>
-          <small>/ ${totalLessons * 10}점</small>
+          <strong>${progress.percent}</strong>
+          <small>/ 100점</small>
         </div>
       </section>
 
@@ -1717,7 +1719,7 @@ function renderDashboard() {
               <p class="insights-section-label">Class Scoreboard</p>
               <h3>세로 막대 점수 차트</h3>
             </div>
-            <span>총점 ${totalLessons * 10}점 기준</span>
+            <span>100점 환산 기준</span>
           </div>
           ${
             students.length > 0
@@ -1733,11 +1735,11 @@ function renderDashboard() {
                       .map(
                         (student) => `
                           <div class="student-score-column">
-                            <span class="student-score-top-value">${student.totalScore.toFixed(student.totalScore % 1 === 0 ? 0 : 1)}점</span>
+                            <span class="student-score-top-value">${student.normalizedScore}점</span>
                             <div class="student-score-column-track">
                               <span class="student-score-column-fill" style="height: ${Math.max(student.percent, student.totalScore > 0 ? 8 : 0)}%"></span>
                             </div>
-                            <strong>${truncateText(`${student.name}${student.id === currentUser?.uid ? ' (나)' : ''}`, 12)}</strong>
+                            <strong>${student.id === currentUser?.uid ? '나' : truncateText(student.name, 12)}</strong>
                             <small>${student.completedLessons}개 차시 완료</small>
                           </div>
                         `,
