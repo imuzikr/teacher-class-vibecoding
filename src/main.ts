@@ -1706,104 +1706,49 @@ function renderDashboard() {
         <div class="insights-section-head">
           <div>
             <p class="insights-section-label">Progress Overview</p>
-            <h2>제출 흐름과 전체 수강생 비교</h2>
+            <h2>전체 수강생 점수 비교</h2>
           </div>
-          <p class="insights-section-note">각 입력 항목을 채울 때마다 2.5점씩 누적됩니다.</p>
+          <p class="insights-section-note">세로 막대가 가로로 이어지는 차트로 전체 학습자 점수를 비교합니다.</p>
         </div>
 
-        <div class="progress-card-grid">
-          <article class="progress-stat-card">
-            <span>완료한 차시 수</span>
-            <strong>${progress.completedLessons}</strong>
-            <small>모든 제출물을 채운 차시 기준</small>
-          </article>
-          <article class="progress-stat-card">
-            <span>링크 제출 수</span>
-            <strong>${progress.linkCount}</strong>
-            <small>결과물 링크를 저장한 차시 수</small>
-          </article>
-          <article class="progress-stat-card">
-            <span>가장 많이 작업한 차시</span>
-            <strong>${progress.mostWorkedLesson ? `${progress.mostWorkedLesson.lesson.session}차시` : '-'}</strong>
-            <small>
-              ${
-                progress.mostWorkedLesson
-                  ? `${progress.mostWorkedLesson.lesson.title} · ${progress.mostWorkedLesson.score.toFixed(1)}점`
-                  : '아직 제출을 시작한 차시가 없습니다.'
-              }
-            </small>
-          </article>
-          <article class="progress-stat-card progress-stat-card-wide">
-            <span>최근 작성한 반성 메모</span>
-            <strong>${progress.latestReflection ? `${progress.latestReflection.lesson.session}차시` : '-'}</strong>
-            <small>
-              ${
-                progress.latestReflection
-                  ? truncateText(progress.latestReflection.reflection, 92)
-                  : '아직 반성 메모가 저장되지 않았습니다.'
-              }
-            </small>
-          </article>
-        </div>
-
-        <div class="insights-chart-grid">
-          <article class="insights-panel-card">
-            <div class="insights-panel-head">
-              <div>
-                <p class="insights-section-label">8차시 진행률</p>
-                <h3>차시별 점수 막대 차트</h3>
-              </div>
-              <span>${progress.percent}% complete</span>
+        <article class="insights-panel-card">
+          <div class="insights-panel-head">
+            <div>
+              <p class="insights-section-label">Class Scoreboard</p>
+              <h3>세로 막대 점수 차트</h3>
             </div>
-            <div class="lesson-score-chart" role="img" aria-label="8차시 진행률 막대 차트">
-              ${progress.lessonScores
-                .map(
-                  (summary) => `
-                    <div class="lesson-score-column">
-                      <span class="lesson-score-value">${summary.score.toFixed(summary.score % 1 === 0 ? 0 : 1)}</span>
-                      <div class="lesson-score-bar-track">
-                        <span class="lesson-score-bar-fill" style="height: ${Math.max((summary.score / 10) * 100, summary.score > 0 ? 8 : 0)}%"></span>
-                      </div>
-                      <strong>${summary.lesson.session}차시</strong>
-                    </div>
-                  `,
-                )
-                .join('')}
-            </div>
-          </article>
-
-          <article class="insights-panel-card">
-            <div class="insights-panel-head">
-              <div>
-                <p class="insights-section-label">Class Scoreboard</p>
-                <h3>전체 수강생 점수 비교</h3>
-              </div>
-              <span>총점 ${totalLessons * 10}점 기준</span>
-            </div>
-            <div class="student-scoreboard" role="img" aria-label="전체 수강생 점수 막대 차트">
-              ${
-                students.length > 0
-                  ? students
+            <span>총점 ${totalLessons * 10}점 기준</span>
+          </div>
+          ${
+            students.length > 0
+              ? `
+                <div class="student-scoreboard-scroll">
+                  <div
+                    class="student-scoreboard-vertical"
+                    role="img"
+                    aria-label="전체 수강생 점수 세로 막대 차트"
+                    style="width: ${Math.max(students.length * 110, 960)}px"
+                  >
+                    ${students
                       .map(
                         (student) => `
-                          <div class="student-score-row">
-                            <div class="student-score-meta">
-                              <strong>${student.name}${student.id === currentUser?.uid ? ' (나)' : ''}</strong>
-                              <span>${student.completedLessons}개 차시 완료</span>
+                          <div class="student-score-column">
+                            <span class="student-score-top-value">${student.totalScore.toFixed(student.totalScore % 1 === 0 ? 0 : 1)}점</span>
+                            <div class="student-score-column-track">
+                              <span class="student-score-column-fill" style="height: ${Math.max(student.percent, student.totalScore > 0 ? 8 : 0)}%"></span>
                             </div>
-                            <div class="student-score-track">
-                              <span class="student-score-fill" style="width: ${student.percent}%"></span>
-                            </div>
-                            <div class="student-score-value">${student.totalScore.toFixed(student.totalScore % 1 === 0 ? 0 : 1)}점</div>
+                            <strong>${truncateText(`${student.name}${student.id === currentUser?.uid ? ' (나)' : ''}`, 12)}</strong>
+                            <small>${student.completedLessons}개 차시 완료</small>
                           </div>
                         `,
                       )
-                      .join('')
-                  : `<p class="student-score-empty">아직 비교할 수강생 데이터가 없습니다.</p>`
-              }
-            </div>
-          </article>
-        </div>
+                      .join('')}
+                  </div>
+                </div>
+              `
+              : `<p class="student-score-empty">아직 비교할 수강생 데이터가 없습니다.</p>`
+          }
+        </article>
       </section>
 
       <section class="insights-section">
